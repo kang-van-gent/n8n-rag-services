@@ -1,0 +1,232 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen",
+    "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue",
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background: #ffffff;
+}
+
+.dark body {
+  background: #000000;
+}
+
+/* Black and white themed scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: linear-gradient(
+    180deg,
+    rgba(241, 245, 249, 0.8) 0%,
+    rgba(226, 232, 240, 0.8) 100%
+  );
+  border-radius: 10px;
+}
+
+.dark ::-webkit-scrollbar-track {
+  background: linear-gradient(
+    180deg,
+    rgba(30, 41, 59, 0.8) 0%,
+    rgba(15, 23, 42, 0.8) 100%
+  );
+}
+
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #94a3b8 0%, #64748b 100%);
+  border-radius: 10px;
+  box-shadow: 0 0 10px rgba(148, 163, 184, 0.3);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #64748b 0%, #475569 100%);
+  box-shadow: 0 0 15px rgba(148, 163, 184, 0.4);
+}
+
+/* Black and white background animations */
+.aura-bg {
+  position: relative;
+  overflow: hidden;
+}
+
+.aura-bg::before {
+  content: "";
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: conic-gradient(
+    from 0deg at 50% 50%,
+    rgba(148, 163, 184, 0.05) 0deg,
+    rgba(203, 213, 225, 0.05) 90deg,
+    rgba(226, 232, 240, 0.05) 180deg,
+    rgba(148, 163, 184, 0.05) 270deg,
+    rgba(148, 163, 184, 0.05) 360deg
+  );
+  animation: aurora 20s linear infinite;
+  pointer-events: none;
+}
+
+.glassmorphism {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.dark .glassmorphism {
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(15px);
+  border: 1px solid rgba(148, 163, 184, 0.1);
+}
+
+/* Floating orbs */
+.floating-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(1px);
+  animation: float 8s ease-in-out infinite;
+  pointer-events: none;
+  opacity: 0.4;
+}
+
+.floating-orb:nth-child(1) {
+  width: 80px;
+  height: 80px;
+  background: radial-gradient(circle, rgba(148, 163, 184, 0.2), transparent);
+  top: 20%;
+  left: 10%;
+  animation-delay: 0s;
+}
+
+.floating-orb:nth-child(2) {
+  width: 120px;
+  height: 120px;
+  background: radial-gradient(circle, rgba(203, 213, 225, 0.15), transparent);
+  top: 60%;
+  right: 15%;
+  animation-delay: -3s;
+}
+
+.floating-orb:nth-child(3) {
+  width: 60px;
+  height: 60px;
+  background: radial-gradient(circle, rgba(226, 232, 240, 0.2), transparent);
+  bottom: 30%;
+  left: 20%;
+  animation-delay: -6s;
+}
+
+.dark .floating-orb:nth-child(1) {
+  background: radial-gradient(circle, rgba(71, 85, 105, 0.3), transparent);
+}
+
+.dark .floating-orb:nth-child(2) {
+  background: radial-gradient(circle, rgba(51, 65, 85, 0.25), transparent);
+}
+
+.dark .floating-orb:nth-child(3) {
+  background: radial-gradient(circle, rgba(30, 41, 59, 0.3), transparent);
+}
+
+/* Black and white button effect */
+.btn-aura {
+  position: relative;
+  background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+  border: none;
+  border-radius: 12px;
+  color: white;
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+.btn-aura::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.1),
+    transparent
+  );
+  transition: left 0.5s;
+}
+
+.btn-aura:hover::before {
+  left: 100%;
+}
+
+.btn-aura:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 30px rgba(148, 163, 184, 0.3);
+  background: linear-gradient(135deg, #334155 0%, #475569 100%);
+}
+
+/* Shimmer effect */
+.shimmer {
+  background-size: 200% 100%;
+  background-image: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.1) 50%,
+    transparent 100%
+  );
+  animation: shimmer 2s infinite;
+}
+
+/* Card hover effect */
+.card-aura {
+  transition: all 0.3s ease;
+}
+
+.card-aura:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 20px 40px rgba(148, 163, 184, 0.15);
+}
+
+/* Input glow effect */
+.input-aura {
+  transition: all 0.3s ease;
+}
+
+.input-aura:focus {
+  box-shadow: 0 0 0 3px rgba(148, 163, 184, 0.2),
+    0 0 15px rgba(148, 163, 184, 0.2);
+  border-color: #94a3b8;
+}
+
+/* Text glow */
+.text-glow {
+  text-shadow: 0 0 10px rgba(148, 163, 184, 0.3);
+}
+
+/* Pulse animation for special elements */
+.pulse-aura {
+  animation: pulse-aura 2s infinite;
+}
+
+@keyframes pulse-aura {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.8;
+    transform: scale(1.05);
+  }
+}
