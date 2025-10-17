@@ -6,30 +6,88 @@ import {
   Navigate,
 } from "react-router-dom";
 import { ThemeProvider } from "./contexts/ThemeContext";
+import { AuthProvider } from "./contexts/AuthContext";
+import { ToastProvider } from "./contexts/ToastContext";
+import { TokenProvider } from "./contexts/TokenContext";
+import { ProtectedRoute, PublicRoute } from "./components/ProtectedRoute";
 import { SignIn } from "./pages/SignIn";
 import { SignUp } from "./pages/SignUp";
 import { ActivateAccount } from "./pages/ActivateAccount";
 import { Dashboard } from "./pages/Dashboard";
+import "./i18n";
 
 function App() {
   return (
     <ThemeProvider>
-      <Router>
-        <div className="App">
-          <Routes>
-            <Route path="/" element={<Navigate to="/sign-up" replace />} />
-            <Route path="/sign-in" element={<SignIn />} />
-            <Route path="/sign-up" element={<SignUp />} />
-            <Route path="/activate-account" element={<ActivateAccount />} />
-            <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/users" element={<Dashboard />} />
-            <Route path="/settings" element={<Dashboard />} />
-            <Route path="*" element={<Navigate to="/sign-up" replace />} />
-          </Routes>
-        </div>
-      </Router>
+      <ToastProvider>
+        <AuthProvider>
+          <TokenProvider>
+            <Router>
+              <div className="App">
+                <Routes>
+                  <Route
+                    path="/"
+                    element={<Navigate to="/dashboard" replace />}
+                  />
+                  <Route
+                    path="/sign-in"
+                    element={
+                      <PublicRoute>
+                        <SignIn />
+                      </PublicRoute>
+                    }
+                  />
+                  <Route
+                    path="/sign-up"
+                    element={
+                      <PublicRoute>
+                        <SignUp />
+                      </PublicRoute>
+                    }
+                  />
+                  <Route
+                    path="/activate-account"
+                    element={
+                      <PublicRoute>
+                        <ActivateAccount />
+                      </PublicRoute>
+                    }
+                  />
+                  <Route
+                    path="/dashboard"
+                    element={
+                      <ProtectedRoute>
+                        <Dashboard />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/users"
+                    element={
+                      <ProtectedRoute>
+                        <Dashboard />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/settings"
+                    element={
+                      <ProtectedRoute>
+                        <Dashboard />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="*"
+                    element={<Navigate to="/dashboard" replace />}
+                  />
+                </Routes>
+              </div>
+            </Router>
+          </TokenProvider>
+        </AuthProvider>
+      </ToastProvider>
     </ThemeProvider>
   );
 }
-
 export default App;

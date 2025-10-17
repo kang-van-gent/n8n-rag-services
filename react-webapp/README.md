@@ -1,6 +1,6 @@
-# Getting Started with Create React App
+# React Webapp with Supabase Integration
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+A modern React application with black/white theme, glassmorphism effects, and full Supabase authentication integration.
 
 ## Available Scripts
 
