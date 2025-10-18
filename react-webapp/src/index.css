@@ -5,8 +5,7 @@
 * {
   transition: color 0.3s cubic-bezier(0.4, 0, 0.2, 1),
     background-color 0.3s cubic-bezier(0.4, 0, 0.2, 1),
-    opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1),
-    transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 body {
@@ -244,6 +243,22 @@ body {
 .nav-link-smooth {
   transition: background-color 0.2s ease, border-color 0.2s ease,
     color 0.2s ease, box-shadow 0.2s ease !important;
+}
+
+/* Sidebar layout transition - only for margin changes */
+.sidebar-layout-transition {
+  transition: margin-left 0.3s ease-out;
+}
+
+/* Prevent unwanted transitions on page content */
+.page-content-no-transition {
+  transition: none !important;
+}
+
+.page-content-no-transition * {
+  transition: color 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+    background-color 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+    opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
 }
 
 /* Pulse animation for special elements */

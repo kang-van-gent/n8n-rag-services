@@ -20,6 +20,7 @@
   },
   "navigation": {
     "dashboard": "Dashboard",
+    "ragSettings": "RAG Settings",
     "users": "Users",
     "settings": "Settings",
     "logout": "Logout",
@@ -171,5 +172,33 @@
     "confirmationFailed": "Failed to confirm email",
     "unexpectedError": "An unexpected error occurred",
     "checkEmailMessage": "Please check your email and click the confirmation link to activate your account."
+  },
+  "features": {
+    "documentProcessing": "Document Processing",
+    "documentProcessingDesc": "Advanced document parsing and content extraction",
+    "aiGeneration": "AI Text Generation",
+    "aiGenerationDesc": "Intelligent text generation using advanced language models",
+    "vectorSearch": "Vector Search",
+    "vectorSearchDesc": "Semantic search and similarity matching capabilities",
+    "analytics": "Analytics Dashboard",
+    "analyticsDesc": "Comprehensive usage analytics and performance metrics",
+    "chatInterface": "Chat Interface",
+    "chatInterfaceDesc": "Interactive conversational AI interface",
+    "security": "Enterprise Security",
+    "securityDesc": "Advanced security features and compliance tools"
+  },
+  "addons": {
+    "advancedAnalytics": "Advanced Analytics",
+    "advancedAnalyticsDesc": "In-depth analytics with custom reports and data visualization tools",
+    "multiLanguage": "Multi-Language Support",
+    "multiLanguageDesc": "Process and generate content in over 50 languages with accuracy",
+    "advancedSecurity": "Advanced Security Suite",
+    "advancedSecurityDesc": "Enterprise-grade security with encryption and audit logging",
+    "bulkProcessing": "Bulk Document Processing",
+    "bulkProcessingDesc": "Process thousands of documents simultaneously with priority queuing",
+    "apiAccess": "Enhanced API Access",
+    "apiAccessDesc": "Advanced API endpoints with higher rate limits and webhooks",
+    "exportTools": "Advanced Export Tools",
+    "exportToolsDesc": "Export data in multiple formats with custom templates and scheduling"
   }
 }

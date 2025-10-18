@@ -14,6 +14,7 @@ import { SignIn } from "./pages/SignIn";
 import { SignUp } from "./pages/SignUp";
 import { ActivateAccount } from "./pages/ActivateAccount";
 import { Dashboard } from "./pages/Dashboard";
+import { RagSettings } from "./pages/RagSettings";
 import "./i18n";
 
 function App() {
@@ -58,6 +59,14 @@ function App() {
                     element={
                       <ProtectedRoute>
                         <Dashboard />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/rag-settings"
+                    element={
+                      <ProtectedRoute>
+                        <RagSettings />
                       </ProtectedRoute>
                     }
                   />

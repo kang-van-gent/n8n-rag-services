@@ -20,6 +20,7 @@
   },
   "navigation": {
     "dashboard": "Dashboard",
+    "ragSettings": "RAG Instellingen",
     "users": "Gebruikers",
     "settings": "Instellingen",
     "logout": "Uitloggen",
@@ -171,5 +172,33 @@
     "confirmationFailed": "E-mail bevestigen mislukt",
     "unexpectedError": "Er is een onverwachte fout opgetreden",
     "checkEmailMessage": "Controleer je e-mail en klik op de bevestigingslink om je account te activeren."
+  },
+  "features": {
+    "documentProcessing": "Documentverwerking",
+    "documentProcessingDesc": "Geavanceerde documentparsing en inhoud extractie",
+    "aiGeneration": "AI Tekstgeneratie",
+    "aiGenerationDesc": "Intelligente tekstgeneratie met geavanceerde taalmodellen",
+    "vectorSearch": "Vector Zoeken",
+    "vectorSearchDesc": "Semantisch zoeken en gelijkenismogelijkheden",
+    "analytics": "Analytics Dashboard",
+    "analyticsDesc": "Uitgebreide gebruiksanalyse en prestatiemetrics",
+    "chatInterface": "Chat Interface",
+    "chatInterfaceDesc": "Interactieve conversationele AI interface",
+    "security": "Enterprise Beveiliging",
+    "securityDesc": "Geavanceerde beveiligingsfuncties en compliance tools"
+  },
+  "addons": {
+    "advancedAnalytics": "Geavanceerde Analytics",
+    "advancedAnalyticsDesc": "Diepgaande analytics met aangepaste rapporten en datavisualisatie tools",
+    "multiLanguage": "Meertalige Ondersteuning",
+    "multiLanguageDesc": "Verwerk en genereer inhoud in meer dan 50 talen met nauwkeurigheid",
+    "advancedSecurity": "Geavanceerde Beveiligingssuite",
+    "advancedSecurityDesc": "Enterprise-grade beveiliging met encryptie en audit logging",
+    "bulkProcessing": "Bulk Documentverwerking",
+    "bulkProcessingDesc": "Verwerk duizenden documenten tegelijkertijd met prioriteitswachtrij",
+    "apiAccess": "Verbeterde API Toegang",
+    "apiAccessDesc": "Geavanceerde API endpoints met hogere rate limits en webhooks",
+    "exportTools": "Geavanceerde Export Tools",
+    "exportToolsDesc": "Exporteer data in meerdere formaten met aangepaste templates en planning"
   }
 }
