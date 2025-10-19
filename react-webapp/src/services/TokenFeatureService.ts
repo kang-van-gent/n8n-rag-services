@@ -64,13 +64,25 @@ export class TokenFeatureService {
     if (token.addons && Array.isArray(token.addons)) {
       token.addons.forEach((addon: any) => {
         // Handle both string keys and addon objects
-        const addonKey = typeof addon === 'string' ? addon : addon.key;
+        let addonKey: string;
+        
+        if (typeof addon === 'string') {
+          addonKey = addon;
+        } else if (addon.key) {
+          addonKey = addon.key;
+        } else if (addon.id) {
+          // Handle legacy format where key might be in id (before underscore)
+          addonKey = addon.id.split('_')[0];
+        } else {
+          console.warn('Invalid addon format:', addon);
+          return;
+        }
         
         // Check if it's not already included in the base plan
         if (addonKey && !planFeatures.find(f => f.featureKey === addonKey)) {
           addOnFeatures.push({
             featureKey: addonKey,
-            quantity: 1,
+            quantity: addon.quantity || 1,
             displayName: this.getFeatureDisplayName(addonKey)
           });
         }
@@ -192,6 +204,17 @@ export class TokenFeatureService {
   }
 
   /**
+   * Get base plan pricing
+   */
+  static getBasePlanPricing(): Record<string, { price: string; period: string }> {
+    return {
+      basic: { price: '299', period: 'month' },
+      standard: { price: '599', period: 'month' },
+      enterprise: { price: '1299', period: 'month' }
+    };
+  }
+
+  /**
    * Get add-on pricing (this could be moved to a separate pricing service)
    */
   static getAddOnPricing(): Record<string, { price: string; period: string }> {
@@ -204,6 +227,67 @@ export class TokenFeatureService {
       analytics_dashboard: { price: '299', period: 'month' },
       webhook_integration: { price: '199', period: 'month' },
       api_access: { price: '599', period: 'month' }
+    };
+  }
+
+  /**
+   * Calculate total renewal price including base plan and purchased add-ons
+   */
+  static calculateRenewalPrice(
+    token: TokenCompat | null, 
+    paymentOrders: any[]
+  ): { basePrice: number; addOnPrice: number; totalPrice: number; breakdown: any[] } {
+    if (!token) {
+      return { basePrice: 0, addOnPrice: 0, totalPrice: 0, breakdown: [] };
+    }
+
+    const basePricing = this.getBasePlanPricing();
+    const addOnPricing = this.getAddOnPricing();
+    
+    // Get base plan price
+    const basePlan = basePricing[token.package.toLowerCase()];
+    const basePrice = basePlan ? parseInt(basePlan.price) : 0;
+
+    // Calculate add-on prices from completed payment orders
+    let addOnPrice = 0;
+    const breakdown: any[] = [
+      {
+        type: 'plan',
+        name: `${token.package.charAt(0).toUpperCase() + token.package.slice(1)} Plan`,
+        price: basePrice,
+        period: basePlan?.period || 'month'
+      }
+    ];
+
+    // Get unique add-ons from payment orders
+    const purchasedAddOns = new Set();
+    paymentOrders
+      .filter(order => order.status === 'completed')
+      .forEach(order => {
+        order.items.forEach((item: any) => {
+          if (!purchasedAddOns.has(item.feature.key)) {
+            purchasedAddOns.add(item.feature.key);
+            const addonPrice = addOnPricing[item.feature.key];
+            if (addonPrice) {
+              const price = parseInt(addonPrice.price);
+              addOnPrice += price;
+              breakdown.push({
+                type: 'addon',
+                name: item.feature.name,
+                key: item.feature.key,
+                price: price,
+                period: addonPrice.period
+              });
+            }
+          }
+        });
+      });
+
+    return {
+      basePrice,
+      addOnPrice,
+      totalPrice: basePrice + addOnPrice,
+      breakdown
     };
   }
 }

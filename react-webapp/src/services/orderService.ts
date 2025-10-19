@@ -230,4 +230,49 @@ export class OrderService {
       return [];
     }
   }
+
+  /**
+   * Get user's order history from the orders table
+   */
+  static async getUserOrders(userId: string): Promise<any[]> {
+    try {
+      const { data, error } = await supabase
+        .from('orders')
+        .select(`
+          id,
+          order_number,
+          status,
+          total_amount,
+          currency,
+          customer_name,
+          customer_email,
+          created_at,
+          updated_at,
+          shipped_at,
+          delivered_at,
+          order_items:order_items(
+            id,
+            product_name,
+            product_sku,
+            product_description,
+            unit_price,
+            quantity,
+            line_total,
+            product_category
+          )
+        `)
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error fetching user orders:', error);
+        return [];
+      }
+
+      return data || [];
+    } catch (error) {
+      console.error('Error in getUserOrders:', error);
+      return [];
+    }
+  }
 }

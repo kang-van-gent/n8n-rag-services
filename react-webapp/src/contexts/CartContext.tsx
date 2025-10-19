@@ -7,8 +7,10 @@ import React, {
 } from "react";
 import { Feature } from "../services/featureService";
 import { TokenFeatureService } from "../services/TokenFeatureService";
-import { PaymentService } from "../services/paymentService";
+import { TokenService } from "../services/tokenService";
 import { useAuth } from "./AuthContext";
+import { OmisePaymentService, OmisePaymentMethod } from "../services";
+import { supabase } from "../lib/supabase";
 
 export interface CartItem {
   id: string;
@@ -41,6 +43,7 @@ interface CartContextType {
   itemCount: number;
   paymentMethods: PaymentMethod[];
   selectedPaymentMethod: PaymentMethod | null;
+  isLoadingPaymentMethods: boolean;
   addItem: (feature: Feature, quantity?: number) => void;
   removeItem: (itemId: string) => void;
   updateQuantity: (itemId: string, quantity: number) => void;
@@ -48,9 +51,10 @@ interface CartContextType {
   addPaymentMethod: (
     paymentMethod: Omit<PaymentMethod, "id" | "createdAt">
   ) => void;
-  removePaymentMethod: (methodId: string) => void;
-  setDefaultPaymentMethod: (methodId: string) => void;
+  removePaymentMethod: (methodId: string) => Promise<void>;
+  setDefaultPaymentMethod: (methodId: string) => Promise<void>;
   selectPaymentMethod: (methodId: string) => void;
+  loadPaymentMethods: () => Promise<void>;
   checkout: () => Promise<{
     success: boolean;
     orderId?: string;
@@ -67,35 +71,10 @@ interface CartProviderProps {
 export function CartProvider({ children }: CartProviderProps) {
   const { user } = useAuth();
   const [items, setItems] = useState<CartItem[]>([]);
-  const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([
-    // Mock payment methods for demonstration
-    {
-      id: "1",
-      type: "credit_card",
-      displayName: "Visa ending in 4242",
-      details: {
-        cardNumber: "4242",
-        expiryDate: "12/25",
-        cardholderName: "John Doe",
-      },
-      isDefault: true,
-      createdAt: "2024-01-01T00:00:00Z",
-    },
-    {
-      id: "2",
-      type: "paypal",
-      displayName: "PayPal Account",
-      details: {
-        paypalEmail: "john.doe@example.com",
-      },
-      isDefault: false,
-      createdAt: "2024-01-15T00:00:00Z",
-    },
-  ]);
+  const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
   const [selectedPaymentMethod, setSelectedPaymentMethod] =
-    useState<PaymentMethod | null>(
-      paymentMethods.find((method) => method.isDefault) || null
-    );
+    useState<PaymentMethod | null>(null);
+  const [isLoadingPaymentMethods, setIsLoadingPaymentMethods] = useState(false);
 
   // Calculate totals
   const totalAmount = items.reduce(
@@ -104,21 +83,77 @@ export function CartProvider({ children }: CartProviderProps) {
   );
   const itemCount = items.reduce((count, item) => count + item.quantity, 0);
 
+  // Initialize Omise and load payment methods when user is available
+  useEffect(() => {
+    if (user?.id) {
+      OmisePaymentService.initialize();
+      loadPaymentMethods();
+    }
+  }, [user?.id]);
+
+  // Load user's payment methods from database
+  const loadPaymentMethods = async () => {
+    if (!user?.id) return;
+
+    setIsLoadingPaymentMethods(true);
+    try {
+      const omisePaymentMethods =
+        await OmisePaymentService.getUserPaymentMethods(user.id);
+      const cartFormatMethods = omisePaymentMethods.map((method) =>
+        OmisePaymentService.convertToCartPaymentMethod(method)
+      );
+
+      setPaymentMethods(cartFormatMethods);
+
+      // Set default payment method
+      const defaultMethod = cartFormatMethods.find(
+        (method) => method.isDefault
+      );
+      setSelectedPaymentMethod(defaultMethod || cartFormatMethods[0] || null);
+    } catch (error) {
+      console.error("Error loading payment methods:", error);
+      setPaymentMethods([]);
+      setSelectedPaymentMethod(null);
+    } finally {
+      setIsLoadingPaymentMethods(false);
+    }
+  };
+
   // Load cart from localStorage on mount
   useEffect(() => {
-    const savedCart = localStorage.getItem("cart");
-    if (savedCart) {
-      try {
-        setItems(JSON.parse(savedCart));
-      } catch (error) {
-        console.error("Error loading cart from localStorage:", error);
+    const loadCartFromStorage = () => {
+      const savedCart = localStorage.getItem("cart");
+      if (savedCart) {
+        try {
+          const parsedCart = JSON.parse(savedCart);
+          if (Array.isArray(parsedCart) && parsedCart.length > 0) {
+            setItems(parsedCart);
+            console.log(
+              "Cart loaded from localStorage:",
+              parsedCart.length,
+              "items"
+            );
+          }
+        } catch (error) {
+          console.error("Error loading cart from localStorage:", error);
+          // Clear corrupted cart data
+          localStorage.removeItem("cart");
+        }
       }
-    }
+    };
+
+    loadCartFromStorage();
   }, []);
 
   // Save cart to localStorage whenever items change
   useEffect(() => {
-    localStorage.setItem("cart", JSON.stringify(items));
+    if (items.length > 0) {
+      localStorage.setItem("cart", JSON.stringify(items));
+      console.log("Cart saved to localStorage:", items.length, "items");
+    } else {
+      // Clear localStorage when cart is empty
+      localStorage.removeItem("cart");
+    }
   }, [items]);
 
   const addItem = (feature: Feature, quantity: number = 1) => {
@@ -171,40 +206,35 @@ export function CartProvider({ children }: CartProviderProps) {
   const addPaymentMethod = (
     paymentMethod: Omit<PaymentMethod, "id" | "createdAt">
   ) => {
-    const newMethod: PaymentMethod = {
-      ...paymentMethod,
-      id: Date.now().toString(),
-      createdAt: new Date().toISOString(),
-    };
-
-    setPaymentMethods((prev) => [...prev, newMethod]);
-  };
-
-  const removePaymentMethod = (methodId: string) => {
-    setPaymentMethods((prev) => {
-      const updated = prev.filter((method) => method.id !== methodId);
-
-      // If removed method was selected, select default or first available
-      if (selectedPaymentMethod?.id === methodId) {
-        const defaultMethod = updated.find((method) => method.isDefault);
-        setSelectedPaymentMethod(defaultMethod || updated[0] || null);
-      }
-
-      return updated;
-    });
-  };
-
-  const setDefaultPaymentMethod = (methodId: string) => {
-    setPaymentMethods((prev) =>
-      prev.map((method) => ({
-        ...method,
-        isDefault: method.id === methodId,
-      }))
+    // Note: This is now handled by OmisePaymentForm component
+    // which calls OmisePaymentService.createPaymentMethod directly
+    // and then triggers a reload of payment methods
+    console.log(
+      "addPaymentMethod called - should use OmisePaymentForm instead"
     );
+  };
 
-    const method = paymentMethods.find((m) => m.id === methodId);
-    if (method) {
-      setSelectedPaymentMethod(method);
+  const removePaymentMethod = async (methodId: string) => {
+    if (!user?.id) return;
+
+    try {
+      await OmisePaymentService.deletePaymentMethod(user.id, methodId);
+      await loadPaymentMethods(); // Reload payment methods
+    } catch (error) {
+      console.error("Error removing payment method:", error);
+      throw error;
+    }
+  };
+
+  const setDefaultPaymentMethod = async (methodId: string) => {
+    if (!user?.id) return;
+
+    try {
+      await OmisePaymentService.setDefaultPaymentMethod(user.id, methodId);
+      await loadPaymentMethods(); // Reload payment methods
+    } catch (error) {
+      console.error("Error setting default payment method:", error);
+      throw error;
     }
   };
 
@@ -231,25 +261,63 @@ export function CartProvider({ children }: CartProviderProps) {
         return { success: false, error: "User not authenticated" };
       }
 
-      // Process payment and add add-ons to user's token
-      const result = await PaymentService.processPayment(
+      // Calculate total with tax
+      const subtotal = totalAmount;
+      const tax = subtotal * 0.07; // 7% tax
+      const total = subtotal + tax;
+
+      // Process payment with Omise
+      const paymentResult = await OmisePaymentService.processPayment(
         user.id,
-        items,
-        totalAmount,
+        total,
+        "THB",
+        `Purchase of ${items.length} add-on(s)`,
         selectedPaymentMethod.id
       );
 
-      if (result.success) {
-        // Clear cart on successful checkout
-        clearCart();
+      if (!paymentResult.success) {
+        return {
+          success: false,
+          error: paymentResult.error || "Payment failed",
+        };
       }
 
-      return result;
+      // Update the order record with cart items
+      if (paymentResult.orderId) {
+        const { error: updateError } = await supabase
+          .from("payment_orders")
+          .update({ items: items })
+          .eq("id", paymentResult.orderId);
+
+        if (updateError) {
+          console.error("Failed to update order with items:", updateError);
+        }
+      }
+
+      // Note: Add-ons are now tracked in payment orders only
+      console.log("✅ Add-ons recorded in payment order:", items);
+
+      // Clear cart on successful checkout
+      clearCart();
+
+      return {
+        success: true,
+        orderId: paymentResult.orderId || paymentResult.chargeId,
+      };
     } catch (error) {
       console.error("Checkout error:", error);
-      return { success: false, error: "Checkout failed. Please try again." };
+      return {
+        success: false,
+        error:
+          error instanceof Error
+            ? error.message
+            : "Checkout failed. Please try again.",
+      };
     }
   };
+
+  // Note: Add-ons are now handled via payment orders tracking only
+  // No longer automatically adding to token features
 
   const value: CartContextType = {
     items,
@@ -257,6 +325,7 @@ export function CartProvider({ children }: CartProviderProps) {
     itemCount,
     paymentMethods,
     selectedPaymentMethod,
+    isLoadingPaymentMethods,
     addItem,
     removeItem,
     updateQuantity,
@@ -265,6 +334,7 @@ export function CartProvider({ children }: CartProviderProps) {
     removePaymentMethod,
     setDefaultPaymentMethod,
     selectPaymentMethod,
+    loadPaymentMethods,
     checkout,
   };
 

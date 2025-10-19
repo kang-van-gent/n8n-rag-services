@@ -14,25 +14,30 @@ import {
   X,
   Edit,
   Star,
+  PlusCircle,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Layout } from "../components/Layout";
 import { useCart, PaymentMethod } from "../contexts/CartContext";
+import { useAuth } from "../contexts/AuthContext";
+import OmisePaymentForm from "../components/OmisePaymentForm";
 import { cn } from "../utils/cn";
 
 export function Cart() {
   const { t } = useTranslation();
+  const { user } = useAuth();
   const {
     items,
     totalAmount,
     itemCount,
     paymentMethods,
     selectedPaymentMethod,
+    isLoadingPaymentMethods,
     removeItem,
     updateQuantity,
     clearCart,
     selectPaymentMethod,
-    addPaymentMethod,
+    loadPaymentMethods,
     checkout,
   } = useCart();
 
@@ -40,18 +45,8 @@ export function Cart() {
   const [checkoutSuccess, setCheckoutSuccess] = useState(false);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const [showPaymentForm, setShowPaymentForm] = useState(false);
-  const [newPaymentMethod, setNewPaymentMethod] = useState({
-    type: "credit_card" as const,
-    displayName: "",
-    details: {
-      cardNumber: "",
-      expiryDate: "",
-      cardholderName: "",
-      cvv: "",
-    },
-    isDefault: false,
-  });
   const [orderId, setOrderId] = useState<string | null>(null);
+  const [isCheckoutMode, setIsCheckoutMode] = useState(false); // Track if payment form was opened from checkout
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat("th-TH", {
@@ -68,8 +63,10 @@ export function Cart() {
   };
 
   const handleCheckout = async () => {
+    // If no payment method exists, show payment form instead of showing error
     if (!selectedPaymentMethod) {
-      setCheckoutError("Please select a payment method");
+      setIsCheckoutMode(true);
+      setShowPaymentForm(true);
       return;
     }
 
@@ -91,44 +88,22 @@ export function Cart() {
     }
   };
 
-  const handleAddPaymentMethod = () => {
-    if (
-      !newPaymentMethod.details.cardNumber ||
-      !newPaymentMethod.details.expiryDate ||
-      !newPaymentMethod.details.cardholderName
-    ) {
-      alert("Please fill in all required fields");
-      return;
-    }
-
-    // Format display name
-    const lastFourDigits = newPaymentMethod.details.cardNumber.slice(-4);
-    const cardType = newPaymentMethod.details.cardNumber.startsWith("4")
-      ? "Visa"
-      : "Mastercard";
-
-    addPaymentMethod({
-      ...newPaymentMethod,
-      displayName: `${cardType} ending in ${lastFourDigits}`,
-      details: {
-        ...newPaymentMethod.details,
-        cardNumber: lastFourDigits, // Only store last 4 digits
-      },
-    });
-
-    // Reset form
-    setNewPaymentMethod({
-      type: "credit_card",
-      displayName: "",
-      details: {
-        cardNumber: "",
-        expiryDate: "",
-        cardholderName: "",
-        cvv: "",
-      },
-      isDefault: false,
-    });
+  const handlePaymentMethodAdded = async (paymentMethod: PaymentMethod) => {
+    console.log("Payment method added successfully:", paymentMethod);
     setShowPaymentForm(false);
+    console.log("Modal should be closed now");
+
+    await loadPaymentMethods(); // Reload payment methods from database
+    selectPaymentMethod(paymentMethod.id); // Select the newly added method
+
+    // Automatically proceed with checkout if we were in checkout mode
+    if (isCheckoutMode) {
+      console.log("Checkout mode detected, proceeding with checkout");
+      setIsCheckoutMode(false); // Reset checkout mode
+      setTimeout(() => {
+        handleCheckout();
+      }, 500); // Small delay to ensure payment method is selected
+    }
   };
 
   const getPaymentMethodIcon = (type: PaymentMethod["type"]) => {
@@ -408,127 +383,76 @@ export function Cart() {
                     {t("cart.paymentMethod")}
                   </h2>
                   <button
-                    onClick={() => setShowPaymentForm(true)}
-                    className="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 text-sm font-medium"
+                    onClick={() => {
+                      setIsCheckoutMode(false); // Not in checkout mode when manually adding
+                      setShowPaymentForm(true);
+                    }}
+                    className="flex items-center gap-2 text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 text-sm font-medium transition-colors"
                   >
+                    <PlusCircle className="w-4 h-4" />
                     {t("cart.addNew")}
                   </button>
                 </div>
 
-                <div className="space-y-3">
-                  {paymentMethods.map((method) => (
-                    <label
-                      key={method.id}
-                      className={cn(
-                        "flex items-center gap-3 p-3 border rounded-lg cursor-pointer transition-colors",
-                        selectedPaymentMethod?.id === method.id
-                          ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20"
-                          : "border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50"
-                      )}
-                    >
-                      <input
-                        type="radio"
-                        name="paymentMethod"
-                        checked={selectedPaymentMethod?.id === method.id}
-                        onChange={() => selectPaymentMethod(method.id)}
-                        className="text-blue-600 focus:ring-blue-500"
-                      />
-                      <div className="flex items-center gap-2">
-                        {getPaymentMethodIcon(method.type)}
-                        <span className="font-medium text-gray-900 dark:text-gray-100">
-                          {method.displayName}
-                        </span>
-                        {method.isDefault && (
-                          <span className="px-2 py-1 text-xs bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300 rounded">
-                            Default
-                          </span>
-                        )}
-                      </div>
-                    </label>
-                  ))}
-                </div>
-
-                {/* Add Payment Method Form */}
-                {showPaymentForm && (
-                  <div className="mt-4 p-4 border border-gray-200 dark:border-gray-700 rounded-lg">
-                    <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-3">
-                      {t("cart.addCreditCard")}
+                {isLoadingPaymentMethods ? (
+                  <div className="flex items-center justify-center py-8">
+                    <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                    <span className="ml-2 text-gray-600 dark:text-gray-400">
+                      Loading payment methods...
+                    </span>
+                  </div>
+                ) : paymentMethods.length === 0 ? (
+                  <div className="text-center py-6">
+                    <CreditCard className="w-10 h-10 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
+                    <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-2">
+                      No Saved Payment Methods
                     </h3>
-                    <div className="space-y-3">
-                      <input
-                        type="text"
-                        placeholder={t("cart.cardNumber")}
-                        value={newPaymentMethod.details.cardNumber}
-                        onChange={(e) =>
-                          setNewPaymentMethod((prev) => ({
-                            ...prev,
-                            details: {
-                              ...prev.details,
-                              cardNumber: e.target.value,
-                            },
-                          }))
-                        }
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100"
-                      />
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <p className="text-gray-600 dark:text-gray-400 mb-4 text-sm">
+                      You can add a payment method now or during checkout.
+                    </p>
+                    <button
+                      onClick={() => {
+                        setIsCheckoutMode(false); // Not in checkout mode when manually adding
+                        setShowPaymentForm(true);
+                      }}
+                      className="flex items-center justify-center gap-2 px-4 py-2 border border-blue-600 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg font-medium transition-colors mx-auto text-sm"
+                    >
+                      <PlusCircle className="w-4 h-4" />
+                      Add Payment Method
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {paymentMethods.map((method) => (
+                      <label
+                        key={method.id}
+                        className={cn(
+                          "flex items-center gap-3 p-3 border rounded-lg cursor-pointer transition-colors",
+                          selectedPaymentMethod?.id === method.id
+                            ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20"
+                            : "border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50"
+                        )}
+                      >
                         <input
-                          type="text"
-                          placeholder={t("cart.expiryDate")}
-                          value={newPaymentMethod.details.expiryDate}
-                          onChange={(e) =>
-                            setNewPaymentMethod((prev) => ({
-                              ...prev,
-                              details: {
-                                ...prev.details,
-                                expiryDate: e.target.value,
-                              },
-                            }))
-                          }
-                          className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100"
+                          type="radio"
+                          name="paymentMethod"
+                          checked={selectedPaymentMethod?.id === method.id}
+                          onChange={() => selectPaymentMethod(method.id)}
+                          className="text-blue-600 focus:ring-blue-500"
                         />
-                        <input
-                          type="text"
-                          placeholder={t("cart.cvv")}
-                          value={newPaymentMethod.details.cvv}
-                          onChange={(e) =>
-                            setNewPaymentMethod((prev) => ({
-                              ...prev,
-                              details: { ...prev.details, cvv: e.target.value },
-                            }))
-                          }
-                          className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100"
-                        />
-                      </div>
-                      <input
-                        type="text"
-                        placeholder={t("cart.cardholderName")}
-                        value={newPaymentMethod.details.cardholderName}
-                        onChange={(e) =>
-                          setNewPaymentMethod((prev) => ({
-                            ...prev,
-                            details: {
-                              ...prev.details,
-                              cardholderName: e.target.value,
-                            },
-                          }))
-                        }
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100"
-                      />
-                      <div className="flex gap-2">
-                        <button
-                          onClick={handleAddPaymentMethod}
-                          className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
-                        >
-                          Add Card
-                        </button>
-                        <button
-                          onClick={() => setShowPaymentForm(false)}
-                          className="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-                        >
-                          {t("common.cancel")}
-                        </button>
-                      </div>
-                    </div>
+                        <div className="flex items-center gap-2">
+                          {getPaymentMethodIcon(method.type)}
+                          <span className="font-medium text-gray-900 dark:text-gray-100">
+                            {method.displayName}
+                          </span>
+                          {method.isDefault && (
+                            <span className="px-2 py-1 text-xs bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300 rounded">
+                              Default
+                            </span>
+                          )}
+                        </div>
+                      </label>
+                    ))}
                   </div>
                 )}
 
@@ -545,7 +469,7 @@ export function Cart() {
 
                   <button
                     onClick={handleCheckout}
-                    disabled={isCheckingOut || !selectedPaymentMethod}
+                    disabled={isCheckingOut}
                     className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded-lg font-medium transition-colors disabled:cursor-not-allowed"
                   >
                     {isCheckingOut ? (
@@ -556,7 +480,9 @@ export function Cart() {
                     ) : (
                       <>
                         <Lock className="w-4 h-4" />
-                        {t("cart.secureCheckout")}
+                        {paymentMethods.length === 0
+                          ? "Continue to Payment"
+                          : t("cart.secureCheckout")}
                         <ArrowRight className="w-4 h-4" />
                       </>
                     )}
@@ -564,13 +490,27 @@ export function Cart() {
 
                   <div className="flex items-center justify-center gap-2 mt-3 text-sm text-gray-500">
                     <Lock className="w-4 h-4" />
-                    <span>{t("cart.securedBySSL")}</span>
+                    <span>Secured by Omise & SSL encryption</span>
                   </div>
                 </div>
               </div>
             )}
           </div>
         </div>
+
+        {/* Omise Payment Form Modal */}
+        {showPaymentForm && user?.id && (
+          <OmisePaymentForm
+            userId={user.id}
+            onSuccess={handlePaymentMethodAdded}
+            onCancel={() => {
+              setShowPaymentForm(false);
+              setIsCheckoutMode(false); // Reset checkout mode on cancel
+            }}
+            onError={(error) => setCheckoutError(error)}
+            autoSetDefault={paymentMethods.length === 0}
+          />
+        )}
       </div>
     </Layout>
   );
