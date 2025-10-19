@@ -42,7 +42,6 @@ export function Users() {
     lastName: "",
     email: "",
     phone: "",
-    location: "",
   });
 
   useEffect(() => {
@@ -52,7 +51,6 @@ export function Users() {
         lastName: user.user_metadata?.last_name || "",
         email: user.email || "",
         phone: user.user_metadata?.phone || "",
-        location: user.user_metadata?.location || "",
       });
     }
   }, [user]);
@@ -155,17 +153,22 @@ export function Users() {
             </div>
             <button
               onClick={() => setIsEditing(!isEditing)}
-              className="flex items-center justify-center gap-2 px-3 sm:px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors text-sm sm:text-base w-full sm:w-auto"
+              className={cn(
+                "flex items-center justify-center gap-2 px-4 sm:px-6 py-2.5 rounded-xl font-semibold transition-all duration-200 text-sm sm:text-base w-full sm:w-auto shadow-lg hover:shadow-xl transform hover:-translate-y-0.5",
+                isEditing
+                  ? "bg-gradient-to-r from-gray-500 to-gray-600 hover:from-gray-600 hover:to-gray-700 text-white border border-gray-400"
+                  : "bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white border border-blue-400"
+              )}
             >
               {isEditing ? (
                 <>
                   <X className="w-4 h-4" />
-                  Cancel
+                  {t("users.cancel")}
                 </>
               ) : (
                 <>
                   <Edit className="w-4 h-4" />
-                  Edit Profile
+                  {t("users.editProfile")}
                 </>
               )}
             </button>
@@ -175,7 +178,7 @@ export function Users() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                First Name
+                {t("users.firstName")}
               </label>
               {isEditing ? (
                 <input
@@ -191,14 +194,14 @@ export function Users() {
                 />
               ) : (
                 <div className="px-3 py-2 bg-gray-50 dark:bg-gray-800 rounded-lg text-gray-900 dark:text-gray-100">
-                  {userProfile.firstName || "Not set"}
+                  {userProfile.firstName || t("users.notSet")}
                 </div>
               )}
             </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Last Name
+                {t("users.lastName")}
               </label>
               {isEditing ? (
                 <input
@@ -214,14 +217,14 @@ export function Users() {
                 />
               ) : (
                 <div className="px-3 py-2 bg-gray-50 dark:bg-gray-800 rounded-lg text-gray-900 dark:text-gray-100">
-                  {userProfile.lastName || "Not set"}
+                  {userProfile.lastName || t("users.notSet")}
                 </div>
               )}
             </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Email
+                {t("users.email")}
               </label>
               <div className="px-3 py-2 bg-gray-50 dark:bg-gray-800 rounded-lg text-gray-900 dark:text-gray-100">
                 <div className="flex items-center gap-2">
@@ -233,7 +236,7 @@ export function Users() {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Phone
+                {t("users.phone")}
               </label>
               {isEditing ? (
                 <input
@@ -251,33 +254,7 @@ export function Users() {
                 <div className="px-3 py-2 bg-gray-50 dark:bg-gray-800 rounded-lg text-gray-900 dark:text-gray-100">
                   <div className="flex items-center gap-2">
                     <Phone className="w-4 h-4 text-gray-500" />
-                    {userProfile.phone || "Not set"}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div className="sm:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Location
-              </label>
-              {isEditing ? (
-                <input
-                  type="text"
-                  value={userProfile.location}
-                  onChange={(e) =>
-                    setUserProfile((prev) => ({
-                      ...prev,
-                      location: e.target.value,
-                    }))
-                  }
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100"
-                />
-              ) : (
-                <div className="px-3 py-2 bg-gray-50 dark:bg-gray-800 rounded-lg text-gray-900 dark:text-gray-100">
-                  <div className="flex items-center gap-2">
-                    <MapPin className="w-4 h-4 text-gray-500" />
-                    {userProfile.location || "Not set"}
+                    {userProfile.phone || t("users.notSet")}
                   </div>
                 </div>
               )}
@@ -289,14 +266,14 @@ export function Users() {
                   onClick={() => setIsEditing(false)}
                   className="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors font-medium"
                 >
-                  Cancel
+                  {t("users.cancel")}
                 </button>
                 <button
                   onClick={handleSaveProfile}
                   className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-medium transition-colors"
                 >
                   <Save className="w-4 h-4" />
-                  Save Changes
+                  {t("users.saveChanges")}
                 </button>
               </div>
             )}
@@ -310,7 +287,7 @@ export function Users() {
             <div className="flex items-center gap-3 mb-6">
               <Package className="w-6 h-6 text-blue-600 dark:text-blue-400" />
               <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">
-                Current Plan
+                {t("users.currentPlan")}
               </h2>
             </div>
 
@@ -318,7 +295,7 @@ export function Users() {
               <div className="flex items-center justify-center py-8">
                 <div className="animate-spin w-6 h-6 border-2 border-gray-300 border-t-gray-600 rounded-full"></div>
                 <span className="ml-2 text-gray-600 dark:text-gray-300">
-                  Loading...
+                  {t("users.loading")}
                 </span>
               </div>
             ) : token ? (
@@ -330,22 +307,25 @@ export function Users() {
                       <span className="font-semibold text-emerald-900 dark:text-emerald-100">
                         {token.package.charAt(0).toUpperCase() +
                           token.package.slice(1)}{" "}
-                        Plan
+                        {t("users.plan")}
                       </span>
                     </div>
                     <span className="text-sm font-medium text-emerald-700 dark:text-emerald-300">
-                      Active
+                      {t("users.activePlan")}
                     </span>
                   </div>
                   <div className="text-sm text-emerald-800 dark:text-emerald-200">
-                    Expires:{" "}
-                    {token.expiredAt ? formatDate(token.expiredAt) : "Never"}
+                    {t("users.expires")}:{" "}
+                    {token.expiredAt
+                      ? formatDate(token.expiredAt)
+                      : t("users.never")}
                   </div>
                 </div>
 
                 <div>
                   <h4 className="font-medium text-gray-900 dark:text-gray-100 mb-3">
-                    Included Features ({getIncludedFeatures().length})
+                    {t("users.includedFeatures")} (
+                    {getIncludedFeatures().length})
                   </h4>
                   <div className="space-y-2 max-h-48 overflow-y-auto">
                     {getIncludedFeatures().map((feature, index) => (
@@ -359,7 +339,7 @@ export function Users() {
                             {feature.displayName || feature.featureKey}
                           </div>
                           <div className="text-xs text-gray-600 dark:text-gray-400">
-                            Quantity: {feature.quantity}
+                            {t("users.quantity")}: {feature.quantity}
                           </div>
                         </div>
                       </div>
@@ -371,13 +351,13 @@ export function Users() {
               <div className="text-center py-8">
                 <AlertCircle className="w-12 h-12 text-amber-600 dark:text-amber-400 mx-auto mb-3" />
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
-                  No Active Plan
+                  {t("users.noActivePlan")}
                 </h3>
                 <p className="text-gray-600 dark:text-gray-300 mb-4">
-                  Activate a plan to access premium features
+                  {t("users.activateFeatures")}
                 </p>
                 <button className="btn-aura px-4 py-2 text-sm font-semibold rounded-lg">
-                  Choose Plan
+                  {t("users.choosePlan")}
                 </button>
               </div>
             )}
@@ -388,11 +368,12 @@ export function Users() {
             <div className="flex items-center gap-3 mb-6">
               <ShoppingCart className="w-6 h-6 text-purple-600 dark:text-purple-400" />
               <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">
-                Shopping Cart
+                {t("users.shoppingCart")}
               </h2>
               {itemCount > 0 && (
                 <span className="bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300 text-xs font-medium px-2 py-1 rounded-full">
-                  {itemCount} item{itemCount !== 1 ? "s" : ""}
+                  {itemCount}{" "}
+                  {itemCount !== 1 ? t("cart.items") : t("cart.item")}
                 </span>
               )}
             </div>
@@ -410,7 +391,8 @@ export function Users() {
                           {item.feature.name}
                         </div>
                         <div className="text-xs text-gray-600 dark:text-gray-400">
-                          Qty: {item.quantity} × ฿{item.price}/{item.period}
+                          {t("users.quantity")}: {item.quantity} × ฿{item.price}
+                          /{item.period}
                         </div>
                       </div>
                       <div className="text-sm font-semibold text-purple-600 dark:text-purple-400">
@@ -422,7 +404,7 @@ export function Users() {
 
                 <div className="pt-3 border-t border-purple-200 dark:border-purple-500/30">
                   <div className="flex items-center justify-between text-base font-semibold text-gray-900 dark:text-gray-100">
-                    <span>Total:</span>
+                    <span>{t("users.total")}:</span>
                     <span>
                       ฿
                       {items.reduce(
@@ -437,17 +419,17 @@ export function Users() {
                   onClick={() => navigate("/cart")}
                   className="w-full bg-purple-600 hover:bg-purple-700 text-white py-2 px-4 rounded-lg font-medium transition-colors text-sm sm:text-base"
                 >
-                  View Cart & Checkout
+                  {t("users.viewCartCheckout")}
                 </button>
               </div>
             ) : (
               <div className="text-center py-8">
                 <ShoppingCart className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
-                  Cart is Empty
+                  {t("users.cartEmpty")}
                 </h3>
                 <p className="text-gray-600 dark:text-gray-300">
-                  Add some add-ons to enhance your plan
+                  {t("users.cartEmptyDescription")}
                 </p>
               </div>
             )}
@@ -459,7 +441,7 @@ export function Users() {
           <div className="flex items-center gap-3 mb-6">
             <Activity className="w-6 h-6 text-green-600 dark:text-green-400" />
             <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">
-              Recent Activity
+              {t("users.recentActivity")}
             </h2>
           </div>
 

@@ -154,6 +154,34 @@ export interface Database {
           updated_at?: string | null
         }
       }
+      n8n_chat_histories: {
+        Row: {
+          id: number
+          session_id: string
+          user_id: string | null
+          message: any // jsonb
+          message_type: string
+          message_count: number
+          created_at: string
+        }
+        Insert: {
+          id?: number
+          session_id: string
+          user_id?: string | null
+          message: any
+          message_type?: string
+          message_count?: number
+          created_at?: string
+        }
+        Update: {
+          id?: number
+          session_id?: string
+          user_id?: string | null
+          message?: any
+          message_type?: string
+          message_count?: number
+        }
+      }
     }
   }
 }
