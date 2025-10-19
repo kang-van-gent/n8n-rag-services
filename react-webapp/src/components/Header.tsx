@@ -33,30 +33,32 @@ export function Header({ onToggleSidebar, title = "Dashboard" }: HeaderProps) {
           >
             <Menu className="w-5 h-5 text-blue-600 dark:text-blue-400 group-hover:text-blue-700 dark:group-hover:text-blue-300 transition-colors" />
           </button>
-          <div className="flex items-center gap-3">
-            <div className="p-1.5 rounded-lg bg-gradient-to-br from-indigo-600 to-purple-700 animate-pulse-slow shadow-lg">
-              <Sparkles className="w-4 h-4 text-white" />
-            </div>
-            <h1 className="text-xl font-bold bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 dark:from-indigo-400 dark:via-purple-400 dark:to-pink-400 bg-clip-text text-transparent">
-              {t(`navigation.${title.toLowerCase()}`, title)}
-            </h1>
-          </div>
         </div>
 
         <div className="flex items-center space-x-4">
-          {/* Language Switcher */}
-          <LanguageSwitcher />
+          {/* Desktop: Language Switcher + User Profile + Theme Toggle */}
+          <div className="hidden md:flex items-center space-x-4">
+            {/* Language Switcher */}
+            <LanguageSwitcher />
 
-          {/* User Profile */}
-          <div className="flex items-center gap-3 px-3 py-2 rounded-xl glassmorphism hover:bg-gradient-to-r hover:from-indigo-50 hover:to-purple-50 dark:hover:from-indigo-900/20 dark:hover:to-purple-900/20 transition-all duration-300 group">
-            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg">
-              <User className="w-4 h-4 text-white" />
+            {/* User Profile */}
+            <div className="flex items-center gap-3 px-3 py-2 rounded-xl glassmorphism hover:bg-gradient-to-r hover:from-indigo-50 hover:to-purple-50 dark:hover:from-indigo-900/20 dark:hover:to-purple-900/20 transition-all duration-300 group">
+              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg">
+                <User className="w-4 h-4 text-white" />
+              </div>
+              <span className="text-sm font-medium text-gray-700 dark:text-gray-300 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+                {displayName}
+              </span>
             </div>
-            <span className="text-sm font-medium text-gray-700 dark:text-gray-300 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
-              {displayName}
-            </span>
           </div>
 
+          {/* Mobile: Only Language Switcher + Theme Toggle */}
+          <div className="flex md:hidden items-center space-x-3">
+            {/* Language Switcher */}
+            <LanguageSwitcher />
+          </div>
+
+          {/* Theme Toggle - Always visible */}
           <button
             onClick={toggleTheme}
             className="p-2.5 rounded-xl glassmorphism hover:shadow-lg transition-all duration-300 group hover:bg-orange-50 dark:hover:bg-orange-900/20"

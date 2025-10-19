@@ -21,7 +21,8 @@
   "navigation": {
     "dashboard": "แดชบอร์ด",
     "ragSettings": "การตั้งค่า RAG",
-    "users": "ผู้ใช้งาน",
+    "users": "โปรไฟล์ของฉัน",
+    "cart": "ตะกร้าสินค้า",
     "settings": "การตั้งค่า",
     "logout": "ออกจากระบบ",
     "workspace": "พื้นที่ทำงาน"
@@ -200,5 +201,133 @@
     "apiAccessDesc": "จุดปลาย API ขั้นสูงพร้อมขีดจำกัดอัตราที่สูงขึ้นและ webhooks",
     "exportTools": "เครื่องมือส่งออกขั้นสูง",
     "exportToolsDesc": "ส่งออกข้อมูลในรูปแบบหลากหลายพร้อมเทมเพลตที่กำหนดเองและการกำหนดเวลา"
+  },
+  "ragSettings": {
+    "categories": {
+      "chat": "ฟีเจอร์แชท",
+      "agent": "ฟีเจอร์เอเจนต์",
+      "rag": "ฟีเจอร์ RAG",
+      "general": "ฟีเจอร์ทั่วไป"
+    },
+    "noActiveToken": "ไม่มีโทเค็นที่ใช้งานอยู่",
+    "needTokenMessage": "คุณต้องเปิดใช้งานโทเค็นเพื่อเข้าถึงฟีเจอร์ RAG",
+    "activateToken": "เปิดใช้งานโทเค็น",
+    "activatePlanTitle": "เปิดใช้งานแผนของคุณเพื่อเข้าถึงฟีเจอร์",
+    "activatePlanDescription": "เลือกจากแผนที่ยืดหยุ่นของเราเพื่อปลดล็อกฟีเจอร์ RAG ที่ทรงพลัง แชทบอท และเครื่องมืออัตโนมัติ แต่ละแผนได้รับการออกแบบมาเพื่อขยายตามความต้องการของคุณ",
+    "plans": {
+      "popular": "ยอดนิยม",
+      "basic": {
+        "title": "แผนพื้นฐาน",
+        "price": "$29/เดือน",
+        "features": {
+          "lineChatBot": "แชทบอท LINE 1 ตัว",
+          "ragStorage": "ที่เก็บเอกสาร RAG 1 ชิ้น",
+          "support": "การสนับสนุนพื้นฐาน"
+        }
+      },
+      "standard": {
+        "title": "แผนมาตรฐาน",
+        "price": "$59/เดือน",
+        "features": {
+          "lineChatBots": "แชทบอท LINE 2 ตัว",
+          "messenger": "Facebook Messenger 1 ตัว",
+          "ragStorage": "ที่เก็บเอกสาร RAG 3 ชิ้น",
+          "support": "การสนับสนุนลำดับความสำคัญ"
+        }
+      },
+      "enterprise": {
+        "title": "แผนองค์กร",
+        "price": "$199/เดือน",
+        "features": {
+          "allStandard": "ฟีเจอร์มาตรฐานทั้งหมด",
+          "ragStorage": "ที่เก็บเอกสาร RAG 5 ชิ้น",
+          "calendar": "เอเจนต์ปฏิทิน",
+          "googleDrive": "การรวมกับ Google Drive",
+          "support": "การสนับสนุนระดับพรีเมียม"
+        }
+      }
+    },
+    "viewAllPlans": "ดูแผนทั้งหมด",
+    "activateExistingToken": "เปิดใช้งานโทเค็นที่มีอยู่",
+    "status": {
+      "online": "ออนไลน์",
+      "offline": "ออฟไลน์"
+    },
+    "featuresWillAppear": "ฟีเจอร์จะปรากฏที่นี่เมื่อได้รับการกำหนดค่าแล้ว",
+    "configurationStatus": "สถานะการกำหนดค่า",
+    "featureActive": "ฟีเจอร์ใช้งานได้",
+    "featureActiveDescription": "ฟีเจอร์นี้ได้รับการกำหนดค่าและพร้อมใช้งาน ข้อมูลรับรองที่จำเป็นมีอยู่แล้ว",
+    "configurationRequired": "จำเป็นต้องกำหนดค่า",
+    "configurationRequiredDescription": "ฟีเจอร์นี้ต้องการข้อมูลรับรองแพลตฟอร์มที่ได้รับการกำหนดค่า กรุณาเพิ่มข้อมูลรับรองที่จำเป็นเพื่อเปิดใช้งานฟีเจอร์นี้",
+    "configureCredentials": "กำหนดค่าข้อมูลรับรอง",
+    "activeToken": "โทเค็นที่ใช้งานอยู่",
+    "loadingToken": "กำลังโหลดข้อมูลโทเค็น...",
+    "tokenActive": "โทเค็นใช้งานได้",
+    "package": "แพ็คเกจ",
+    "expires": "หมดอายุ",
+    "never": "ไม่มีวันหมดอายุ",
+    "webhookUrl": "Webhook URL",
+    "copy": "คัดลอก",
+    "copied": "คัดลอกแล้ว",
+    "features": "ฟีเจอร์",
+    "plan": "แผน",
+    "noFeaturesAvailable": "ไม่มีฟีเจอร์ที่ใช้ได้",
+    "loadingFeatures": "กำลังโหลดฟีเจอร์...",
+    "availableAddons": "ส่วนเสริมที่มีจำหน่าย",
+    "enhanceYourPlan": "ปรับปรุงแผน {{package}} ของคุณ",
+    "viewCart": "ดูตะกร้า",
+    "addon": "ส่วนเสริม",
+    "inCart": "อยู่ในตะกร้า",
+    "addToCart": "เพิ่มลงตะกร้า",
+    "allFeaturesAccess": "คุณสามารถเข้าถึงฟีเจอร์ทั้งหมดแล้ว!",
+    "allFeaturesDescription": "แผน {{package}} ของคุณรวมฟีเจอร์ทั้งหมดที่มี กลับมาดูใหม่สำหรับส่วนเสริมและฟีเจอร์ใหม่",
+    "credentialsSavedSuccess": "บันทึกข้อมูลรับรองสำเร็จ",
+    "featureNowOnline": "ฟีเจอร์ออนไลน์และพร้อมใช้งานแล้ว",
+    "errorSavingCredentials": "เกิดข้อผิดพลาดในการบันทึกข้อมูลรับรอง",
+    "accessToken": "โทเค็นการเข้าถึง",
+    "enterAccessToken": "กรอกโทเค็นการเข้าถึงของคุณ",
+    "recipientId": "รหัสผู้รับ",
+    "enterRecipientId": "กรอกรหัสผู้รับ",
+    "saving": "กำลังบันทึก...",
+    "saveCredentials": "บันทึกข้อมูลรับรอง",
+    "aiSystemMessage": "ข้อความระบบ AI",
+    "aiSystemMessageDescription": "ปรับแต่งพฤติกรรมของผู้ช่วย AI ของคุณ ข้อความนี้กำหนดบุคลิกภาพ ความเชี่ยวชาญ และรูปแบบการตอบสนองเมื่อตอบคำถามตามเอกสารของคุณ",
+    "systemMessageUpdated": "อัปเดตข้อความระบบแล้ว",
+    "systemMessageUpdatedDescription": "ผู้ช่วย AI ของคุณจะใช้ข้อความระบบใหม่ในตอนนี้",
+    "errorUpdatingSystemMessage": "เกิดข้อผิดพลาดในการอัปเดตข้อความระบบ",
+    "systemMessage": "ข้อความระบบ",
+    "systemMessagePlaceholder": "คุณคือผู้ช่วย AI ที่มีประโยชน์ที่ให้ข้อมูลที่ถูกต้องตามเอกสารที่อัปโหลด ให้คำตอบที่กระชับและอ้างอิงแหล่งที่มาเมื่อเป็นไปได้",
+    "charactersCount": "{{current}}/{{max}} ตัวอักษร",
+    "systemMessageTip": "💡 คำแนะนำ: ระบุเฉพาะเจาะจงเกี่ยวกับโทน ระดับความเชี่ยวชาญ และรูปแบบการตอบสนอง",
+    "saveSystemMessage": "บันทึกข้อความระบบ",
+    "documentManagement": "การจัดการเอกสาร",
+    "uploading": "กำลังอัปโหลด...",
+    "dropFilesOrClick": "ลากไฟล์มาวางที่นี่หรือคลิกเพื่ออัปโหลด",
+    "supportedFormats": "รองรับ: TXT, MD, JSON, CSV (สูงสุด 10MB)",
+    "chooseFiles": "เลือกไฟล์",
+    "uploadedDocuments": "เอกสารที่อัปโหลดแล้ว ({{count}})",
+    "untitled": "ไม่มีชื่อ"
+  },
+  "users": {
+    "myProfile": "โปรไฟล์ของฉัน",
+    "notLoggedIn": "ไม่ได้เข้าสู่ระบบ",
+    "pleaseLogIn": "กรุณาเข้าสู่ระบบเพื่อดูโปรไฟล์ของคุณ",
+    "activity": {
+      "loggedIn": "เข้าสู่ระบบแล้ว",
+      "updatedProfile": "อัปเดตโปรไฟล์แล้ว",
+      "addedToCart": "เพิ่มสินค้าลงตะกร้าแล้ว"
+    }
+  },
+  "cart": {
+    "empty": {
+      "title": "ตะกร้าของคุณว่างเปล่า",
+      "description": "เรียกดูส่วนเสริมของเราและปรับปรุงแผนของคุณด้วยฟีเจอร์เพิ่มเติม"
+    },
+    "orderComplete": "คำสั่งซื้อเสร็จสิ้น",
+    "orderCompleteTitle": "คำสั่งซื้อเสร็จสิ้น!",
+    "orderCompleteMessage": "ขขอบคุณสำหรับการซื้อของคุณ ส่วนเสริมของคุณได้รับการเปิดใช้งานและพร้อมใช้งานแล้ว",
+    "orderId": "หมายเลขคำสั่งซื้อ",
+    "viewMyFeatures": "ดูฟีเจอร์ของฉัน",
+    "continueShopping": "ซื้อต่อ"
   }
 }

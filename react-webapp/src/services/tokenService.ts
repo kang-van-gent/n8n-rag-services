@@ -11,6 +11,7 @@ export interface Token {
   features: any[];
   addons: any[];
   type: string;
+  systemMessage?: string;
 }
 
 export class TokenService {
@@ -164,6 +165,30 @@ export class TokenService {
   }
 
   /**
+   * Update token system message
+   */
+  static async updateSystemMessage(
+    userId: string,
+    systemMessage: string
+  ): Promise<Token> {
+    try {
+      const { data, error } = await supabase
+        .from('tokens')
+        .update({ systemMessage })
+        .eq('user_id', userId)
+        .eq('status', 'active')
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    } catch (error) {
+      console.error('Error updating system message:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Update token features or addons
    */
   static async updateTokenFeatures(
@@ -176,6 +201,8 @@ export class TokenService {
     }
   ): Promise<Token> {
     try {
+      console.log('Updating token for user:', userId, 'with updates:', updates);
+      
       const { data, error } = await supabase
         .from('tokens')
         .update(updates)

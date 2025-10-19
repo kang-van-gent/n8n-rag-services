@@ -117,18 +117,18 @@ export function Dashboard() {
       <Layout title="Activate Token">
         <div className="space-y-8">
           {/* Welcome Section */}
-          <div className="glassmorphism rounded-2xl shadow-bw p-8 border border-gray-200/20 dark:border-gray-500/20 card-aura relative overflow-hidden">
+          <div className="bg-white/90 dark:bg-gray-800/80 backdrop-blur-sm rounded-2xl shadow-lg p-4 sm:p-6 lg:p-8 border border-gray-200/40 dark:border-gray-500/30 shadow-gray-200/60 dark:shadow-none card-aura relative overflow-hidden">
             <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-gray-400/10 to-transparent rounded-full blur-xl"></div>
             <div className="relative z-10">
               <div className="flex items-center gap-3 mb-4">
                 <div className="p-2 rounded-full bg-gradient-to-br from-blue-600 to-indigo-700 animate-pulse-slow shadow-lg">
                   <Key className="w-6 h-6 text-white" />
                 </div>
-                <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 via-purple-600 to-indigo-700 dark:from-blue-400 dark:via-purple-400 dark:to-indigo-400 bg-clip-text text-transparent">
+                <h1 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-blue-600 via-purple-600 to-indigo-700 dark:from-blue-400 dark:via-purple-400 dark:to-indigo-400 bg-clip-text text-transparent">
                   {t("dashboard.welcome", { name: userName })}
                 </h1>
               </div>
-              <p className="text-slate-600 dark:text-slate-300 text-lg">
+              <p className="text-slate-600 dark:text-slate-300 text-base sm:text-lg">
                 {t("dashboard.needToken")}
               </p>
               <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
@@ -149,20 +149,20 @@ export function Dashboard() {
     <Layout title="Dashboard">
       <div className="space-y-8">
         {/* Welcome Section with Token Info */}
-        <div className="glassmorphism rounded-2xl shadow-bw p-8 border border-gray-200/20 dark:border-gray-500/20 card-aura relative overflow-hidden">
+        <div className="bg-white/90 dark:bg-gray-800/80 backdrop-blur-sm rounded-2xl shadow-lg p-4 sm:p-6 lg:p-8 border border-gray-200/40 dark:border-gray-500/30 shadow-gray-200/60 dark:shadow-none card-aura relative overflow-hidden">
           <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-gray-400/10 to-transparent rounded-full blur-xl"></div>
           <div className="relative z-10">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
               <div>
                 <div className="flex items-center gap-3 mb-4">
                   <div className="p-2 rounded-full bg-gradient-to-br from-emerald-600 to-teal-700 animate-pulse-slow shadow-lg">
                     <Sparkles className="w-6 h-6 text-white" />
                   </div>
-                  <h1 className="text-3xl font-bold bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 dark:from-emerald-400 dark:via-teal-400 dark:to-cyan-400 bg-clip-text text-transparent">
+                  <h1 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 dark:from-emerald-400 dark:via-teal-400 dark:to-cyan-400 bg-clip-text text-transparent">
                     {t("dashboard.welcomeBack", { name: userName })}
                   </h1>
                 </div>
-                <p className="text-slate-600 dark:text-slate-300 text-lg">
+                <p className="text-slate-600 dark:text-slate-300 text-base sm:text-lg">
                   {t("dashboard.todayActivity")}
                 </p>
                 <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
@@ -195,17 +195,17 @@ export function Dashboard() {
         </div>
 
         {/* Stats Grid */}
-        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 sm:gap-6">
           {stats.map((item, index) => (
             <div
               key={item.name}
-              className="glassmorphism overflow-hidden rounded-2xl card-aura border border-gray-200/20 dark:border-gray-500/20 relative group"
+              className="bg-white/90 dark:bg-gray-800/80 backdrop-blur-sm overflow-hidden rounded-2xl card-aura border border-gray-200/40 dark:border-gray-500/30 shadow-lg shadow-gray-200/60 dark:shadow-none relative group"
               style={{
                 animationDelay: `${index * 100}ms`,
               }}
             >
               <div className="absolute inset-0 bg-gradient-to-br from-transparent via-gray-500/5 to-gray-400/5 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-              <div className="p-6 relative z-10">
+              <div className="p-4 sm:p-6 relative z-10">
                 <div className="flex items-center justify-between">
                   <div className="flex-1">
                     <div className="flex items-center gap-3 mb-3">
@@ -226,13 +226,13 @@ export function Dashboard() {
                         {item.name}
                       </dt>
                     </div>
-                    <dd className="text-2xl font-bold text-slate-900 dark:text-slate-100">
+                    <dd className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-slate-100">
                       {item.value}
                     </dd>
                   </div>
                 </div>
               </div>
-              <div className="bg-gray-50 dark:bg-gray-700 px-5 py-3">
+              <div className="bg-gray-50 dark:bg-gray-700 px-4 sm:px-5 py-3">
                 <div className="text-sm">
                   <span
                     className={`font-medium ${
@@ -253,9 +253,9 @@ export function Dashboard() {
           ))}
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
           {/* Chart Placeholder */}
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+          <div className="bg-white/90 dark:bg-gray-800/80 backdrop-blur-sm rounded-lg shadow-lg p-4 sm:p-6 border border-gray-200/40 dark:border-gray-500/30">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-medium text-gray-900 dark:text-white">
                 {t("dashboard.analyticsOverview")}
@@ -273,7 +273,7 @@ export function Dashboard() {
           </div>
 
           {/* Recent Activity */}
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+          <div className="bg-white/90 dark:bg-gray-800/80 backdrop-blur-sm rounded-lg shadow-lg p-4 sm:p-6 border border-gray-200/40 dark:border-gray-500/30">
             <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">
               {t("dashboard.recentActivity")}
             </h3>
@@ -310,11 +310,11 @@ export function Dashboard() {
         </div>
 
         {/* Quick Actions */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+        <div className="bg-white/90 dark:bg-gray-800/80 backdrop-blur-sm rounded-lg shadow-lg p-4 sm:p-6 border border-gray-200/40 dark:border-gray-500/30">
           <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">
             {t("dashboard.quickActions")}
           </h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
             <button className="p-4 border-2 border-dashed border-blue-300 dark:border-blue-600 rounded-lg hover:border-blue-400 dark:hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all duration-300 group">
               <div className="text-center">
                 <Users className="mx-auto h-8 w-8 text-blue-600 dark:text-blue-400 group-hover:text-blue-700 dark:group-hover:text-blue-300 transition-colors mb-2" />

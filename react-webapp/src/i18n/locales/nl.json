@@ -21,7 +21,8 @@
   "navigation": {
     "dashboard": "Dashboard",
     "ragSettings": "RAG Instellingen",
-    "users": "Gebruikers",
+    "users": "Mijn Profiel",
+    "cart": "Winkelwagen",
     "settings": "Instellingen",
     "logout": "Uitloggen",
     "workspace": "Werkruimte"
@@ -200,5 +201,133 @@
     "apiAccessDesc": "Geavanceerde API endpoints met hogere rate limits en webhooks",
     "exportTools": "Geavanceerde Export Tools",
     "exportToolsDesc": "Exporteer data in meerdere formaten met aangepaste templates en planning"
+  },
+  "ragSettings": {
+    "categories": {
+      "chat": "Chat Functies",
+      "agent": "Agent Functies",
+      "rag": "RAG Functies",
+      "general": "Algemene Functies"
+    },
+    "noActiveToken": "Geen Actieve Token",
+    "needTokenMessage": "Je moet een token activeren om toegang te krijgen tot RAG functies",
+    "activateToken": "Token Activeren",
+    "activatePlanTitle": "Activeer Je Abonnement voor Toegang tot Functies",
+    "activatePlanDescription": "Kies uit onze flexibele abonnementen om krachtige RAG functies, chatbots en automatiseringstools te ontgrendelen. Elk abonnement is ontworpen om mee te schalen met je behoeften.",
+    "plans": {
+      "popular": "POPULAIR",
+      "basic": {
+        "title": "Basis Abonnement",
+        "price": "$29/maand",
+        "features": {
+          "lineChatBot": "1 LINE Chat Bot",
+          "ragStorage": "1 RAG Document Opslag",
+          "support": "Basis Ondersteuning"
+        }
+      },
+      "standard": {
+        "title": "Standaard Abonnement",
+        "price": "$59/maand",
+        "features": {
+          "lineChatBots": "2 LINE Chat Bots",
+          "messenger": "1 Facebook Messenger",
+          "ragStorage": "3 RAG Document Opslag",
+          "support": "Prioriteits Ondersteuning"
+        }
+      },
+      "enterprise": {
+        "title": "Enterprise Abonnement",
+        "price": "$199/maand",
+        "features": {
+          "allStandard": "Alle Standaard functies",
+          "ragStorage": "5 RAG Document Opslag",
+          "calendar": "Agenda Agent",
+          "googleDrive": "Google Drive Integratie",
+          "support": "Premium Ondersteuning"
+        }
+      }
+    },
+    "viewAllPlans": "Bekijk Alle Abonnementen",
+    "activateExistingToken": "Bestaande Token Activeren",
+    "status": {
+      "online": "Online",
+      "offline": "Offline"
+    },
+    "featuresWillAppear": "Functies verschijnen hier zodra ze zijn geconfigureerd.",
+    "configurationStatus": "Configuratie Status",
+    "featureActive": "Functie is Actief",
+    "featureActiveDescription": "Deze functie is geconfigureerd en klaar voor gebruik. De vereiste referenties zijn beschikbaar.",
+    "configurationRequired": "Configuratie Vereist",
+    "configurationRequiredDescription": "Deze functie vereist platform referenties om geconfigureerd te worden. Voeg de vereiste referenties toe om deze functie te activeren.",
+    "configureCredentials": "Referenties Configureren",
+    "activeToken": "Actieve Token",
+    "loadingToken": "Token informatie laden...",
+    "tokenActive": "Token Actief",
+    "package": "Pakket",
+    "expires": "Verloopt",
+    "never": "Nooit",
+    "webhookUrl": "Webhook URL",
+    "copy": "Kopiëren",
+    "copied": "Gekopieerd",
+    "features": "Functies",
+    "plan": "Abonnement",
+    "noFeaturesAvailable": "Geen Functies Beschikbaar",
+    "loadingFeatures": "Functies laden...",
+    "availableAddons": "Beschikbare Add-ons",
+    "enhanceYourPlan": "Verbeter je {{package}} abonnement",
+    "viewCart": "Bekijk Winkelwagen",
+    "addon": "Add-on",
+    "inCart": "In Winkelwagen",
+    "addToCart": "Toevoegen aan Winkelwagen",
+    "allFeaturesAccess": "Je hebt toegang tot alle functies!",
+    "allFeaturesDescription": "Je {{package}} abonnement bevat alle beschikbare functies. Kom later terug voor nieuwe add-ons en functies.",
+    "credentialsSavedSuccess": "Referenties Succesvol Opgeslagen",
+    "featureNowOnline": "De functie is nu online en klaar voor gebruik.",
+    "errorSavingCredentials": "Fout bij het Opslaan van Referenties",
+    "accessToken": "Toegangstoken",
+    "enterAccessToken": "Voer je toegangstoken in",
+    "recipientId": "Ontvanger ID",
+    "enterRecipientId": "Voer ontvanger ID in",
+    "saving": "Opslaan...",
+    "saveCredentials": "Referenties Opslaan",
+    "aiSystemMessage": "AI Systeembericht",
+    "aiSystemMessageDescription": "Pas aan hoe je AI-assistent zich gedraagt. Dit bericht definieert de AI's persoonlijkheid, expertise, en antwoordstijl bij het beantwoorden van vragen op basis van je documenten.",
+    "systemMessageUpdated": "Systeembericht Bijgewerkt",
+    "systemMessageUpdatedDescription": "Je AI-assistent zal nu het nieuwe systeembericht gebruiken.",
+    "errorUpdatingSystemMessage": "Fout bij Bijwerken Systeembericht",
+    "systemMessage": "Systeembericht",
+    "systemMessagePlaceholder": "Je bent een behulpzame AI-assistent die nauwkeurige informatie verstrekt op basis van de geüploade documenten. Wees beknopt en citeer bronnen waar mogelijk.",
+    "charactersCount": "{{current}}/{{max}} tekens",
+    "systemMessageTip": "💡 Tip: Wees specifiek over toon, expertiseniveau en antwoordformaat",
+    "saveSystemMessage": "Systeembericht Opslaan",
+    "documentManagement": "Documentbeheer",
+    "uploading": "Uploaden...",
+    "dropFilesOrClick": "Sleep bestanden hierheen of klik om te uploaden",
+    "supportedFormats": "Ondersteunt: TXT, MD, JSON, CSV (max 10MB)",
+    "chooseFiles": "Bestanden Kiezen",
+    "uploadedDocuments": "Geüploade Documenten ({{count}})",
+    "untitled": "Naamloos"
+  },
+  "users": {
+    "myProfile": "Mijn Profiel",
+    "notLoggedIn": "Niet Ingelogd",
+    "pleaseLogIn": "Log in om je profiel te bekijken.",
+    "activity": {
+      "loggedIn": "Ingelogd",
+      "updatedProfile": "Profiel bijgewerkt",
+      "addedToCart": "Items toegevoegd aan winkelwagen"
+    }
+  },
+  "cart": {
+    "empty": {
+      "title": "Je winkelwagen is leeg",
+      "description": "Bekijk onze add-ons en verbeter je abonnement met extra functies."
+    },
+    "orderComplete": "Bestelling Voltooid",
+    "orderCompleteTitle": "Bestelling Voltooid!",
+    "orderCompleteMessage": "Dank je voor je aankoop. Je add-ons zijn geactiveerd en klaar voor gebruik.",
+    "orderId": "Bestelling ID",
+    "viewMyFeatures": "Bekijk Mijn Functies",
+    "continueShopping": "Verder Winkelen"
   }
 }

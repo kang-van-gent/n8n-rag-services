@@ -136,40 +136,40 @@ export function SignUp() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-white via-gray-100 to-gray-200 dark:from-black dark:via-gray-800 dark:to-gray-900 flex flex-col justify-center py-12 sm:px-6 lg:px-8 relative overflow-hidden">
+    <div className="min-h-screen bg-gradient-to-br from-white via-gray-100 to-gray-200 dark:from-black dark:via-gray-800 dark:to-gray-900 flex flex-col justify-center py-8 sm:py-12 px-4 sm:px-6 lg:px-8 relative overflow-hidden">
       {/* Floating orbs */}
       <div className="floating-orb"></div>
       <div className="floating-orb"></div>
       <div className="floating-orb"></div>
 
       {/* Top controls */}
-      <div className="absolute top-6 right-6 z-10 flex items-center gap-3">
+      <div className="absolute top-4 sm:top-6 right-4 sm:right-6 z-10 flex items-center gap-3">
         <LanguageSwitcher />
         <button
           onClick={toggleTheme}
-          className="p-3 rounded-xl glassmorphism hover:shadow-bw transition-all duration-300 group"
+          className="p-2 sm:p-3 rounded-xl glassmorphism hover:shadow-bw transition-all duration-300 group"
           aria-label="Toggle theme"
         >
           {theme === "light" ? (
-            <Moon className="w-5 h-5 text-gray-600 group-hover:text-gray-800 transition-colors" />
+            <Moon className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600 group-hover:text-gray-800 transition-colors" />
           ) : (
-            <Sun className="w-5 h-5 text-gray-400 group-hover:text-gray-200 transition-colors" />
+            <Sun className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 group-hover:text-gray-200 transition-colors" />
           )}
         </button>
       </div>
 
-      <div className="sm:mx-auto sm:w-full sm:max-w-md relative z-10">
-        <div className="glassmorphism py-10 px-6 shadow-bw border border-gray-200/20 dark:border-gray-500/20 rounded-2xl backdrop-blur-xl">
-          <div className="sm:mx-auto sm:w-full sm:max-w-md mb-8 text-center">
+      <div className="w-full max-w-md mx-auto relative z-10">
+        <div className="glassmorphism py-6 sm:py-10 px-4 sm:px-6 shadow-bw border border-gray-200/20 dark:border-gray-500/20 rounded-2xl backdrop-blur-xl">
+          <div className="w-full mb-6 sm:mb-8 text-center">
             <div className="flex justify-center mb-4">
-              <div className="p-3 rounded-full bg-gradient-to-br from-emerald-600 to-teal-700 shadow-lg animate-pulse-slow">
-                <UserPlus className="w-8 h-8 text-white" />
+              <div className="p-2 sm:p-3 rounded-full bg-gradient-to-br from-emerald-600 to-teal-700 shadow-lg animate-pulse-slow">
+                <UserPlus className="w-6 h-6 sm:w-8 sm:h-8 text-white" />
               </div>
             </div>
-            <h2 className="text-center text-3xl font-extrabold bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 dark:from-emerald-400 dark:via-teal-400 dark:to-cyan-400 bg-clip-text text-transparent mb-2">
+            <h2 className="text-center text-2xl sm:text-3xl font-extrabold bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 dark:from-emerald-400 dark:via-teal-400 dark:to-cyan-400 bg-clip-text text-transparent mb-2">
               {t("auth.joinExperience")}
             </h2>
-            <p className="text-center text-sm text-gray-600 dark:text-gray-300">
+            <p className="text-center text-sm text-gray-600 dark:text-gray-300 px-2">
               {t("auth.signUpSubtitle")}{" "}
               <Link
                 to="/sign-in"
@@ -181,7 +181,7 @@ export function SignUp() {
           </div>
 
           <form className="space-y-6" onSubmit={handleSubmit}>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1">
                 <label
                   htmlFor="firstName"

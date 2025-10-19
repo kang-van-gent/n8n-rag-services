@@ -21,7 +21,8 @@
   "navigation": {
     "dashboard": "Dashboard",
     "ragSettings": "RAG Settings",
-    "users": "Users",
+    "users": "My Profile",
+    "cart": "Shopping Cart",
     "settings": "Settings",
     "logout": "Logout",
     "workspace": "Workspace"
@@ -200,5 +201,133 @@
     "apiAccessDesc": "Advanced API endpoints with higher rate limits and webhooks",
     "exportTools": "Advanced Export Tools",
     "exportToolsDesc": "Export data in multiple formats with custom templates and scheduling"
+  },
+  "ragSettings": {
+    "categories": {
+      "chat": "Chat Features",
+      "agent": "Agent Features", 
+      "rag": "RAG Features",
+      "general": "General Features"
+    },
+    "noActiveToken": "No Active Token",
+    "needTokenMessage": "You need to activate a token to access RAG features",
+    "activateToken": "Activate Token",
+    "activatePlanTitle": "Activate Your Plan to Access Features",
+    "activatePlanDescription": "Choose from our flexible plans to unlock powerful RAG features, chatbots, and automation tools. Each plan is designed to scale with your needs.",
+    "plans": {
+      "popular": "POPULAR",
+      "basic": {
+        "title": "Basic Plan",
+        "price": "$29/month",
+        "features": {
+          "lineChatBot": "1 LINE Chat Bot",
+          "ragStorage": "1 RAG Document Storage",
+          "support": "Basic Support"
+        }
+      },
+      "standard": {
+        "title": "Standard Plan",
+        "price": "$59/month",
+        "features": {
+          "lineChatBots": "2 LINE Chat Bots",
+          "messenger": "1 Facebook Messenger",
+          "ragStorage": "3 RAG Document Storage",
+          "support": "Priority Support"
+        }
+      },
+      "enterprise": {
+        "title": "Enterprise Plan",
+        "price": "$199/month",
+        "features": {
+          "allStandard": "All Standard features",
+          "ragStorage": "5 RAG Document Storage",
+          "calendar": "Calendar Agent",
+          "googleDrive": "Google Drive Integration",
+          "support": "Premium Support"
+        }
+      }
+    },
+    "viewAllPlans": "View All Plans",
+    "activateExistingToken": "Activate Existing Token",
+    "status": {
+      "online": "Online",
+      "offline": "Offline"
+    },
+    "featuresWillAppear": "Features will appear here once they are configured.",
+    "configurationStatus": "Configuration Status",
+    "featureActive": "Feature is Active",
+    "featureActiveDescription": "This feature is configured and ready to use. The required credentials are available.",
+    "configurationRequired": "Configuration Required",
+    "configurationRequiredDescription": "This feature requires platform credentials to be configured. Please add the required credentials to activate this feature.",
+    "configureCredentials": "Configure Credentials",
+    "activeToken": "Active Token",
+    "loadingToken": "Loading token information...",
+    "tokenActive": "Token Active",
+    "package": "Package",
+    "expires": "Expires",
+    "never": "Never",
+    "webhookUrl": "Webhook URL",
+    "copy": "Copy",
+    "copied": "Copied",
+    "features": "Features",
+    "plan": "Plan",
+    "noFeaturesAvailable": "No Features Available",
+    "loadingFeatures": "Loading features...",
+    "availableAddons": "Available Add-ons",
+    "enhanceYourPlan": "Enhance your {{package}} plan",
+    "viewCart": "View Cart",
+    "addon": "Add-on",
+    "inCart": "In Cart",
+    "addToCart": "Add to Cart",
+    "allFeaturesAccess": "You have access to all features!",
+    "allFeaturesDescription": "Your {{package}} plan includes all available features. Check back later for new add-ons and features.",
+    "credentialsSavedSuccess": "Credentials Saved Successfully",
+    "featureNowOnline": "The feature is now online and ready to use.",
+    "errorSavingCredentials": "Error Saving Credentials",
+    "accessToken": "Access Token",
+    "enterAccessToken": "Enter your access token",
+    "recipientId": "Recipient ID",
+    "enterRecipientId": "Enter recipient ID",
+    "saving": "Saving...",
+    "saveCredentials": "Save Credentials",
+    "aiSystemMessage": "AI System Message",
+    "aiSystemMessageDescription": "Customize how your AI assistant behaves. This message defines the AI's personality, expertise, and response style when answering questions based on your documents.",
+    "systemMessageUpdated": "System Message Updated",
+    "systemMessageUpdatedDescription": "Your AI assistant will now use the new system message.",
+    "errorUpdatingSystemMessage": "Error Updating System Message",
+    "systemMessage": "System Message",
+    "systemMessagePlaceholder": "You are a helpful AI assistant that provides accurate information based on the uploaded documents. Be concise and cite sources when possible.",
+    "charactersCount": "{{current}}/{{max}} characters",
+    "systemMessageTip": "💡 Tip: Be specific about tone, expertise level, and response format",
+    "saveSystemMessage": "Save System Message",
+    "documentManagement": "Document Management",
+    "uploading": "Uploading...",
+    "dropFilesOrClick": "Drop files here or click to upload",
+    "supportedFormats": "Supports: TXT, MD, JSON, CSV (max 10MB)",
+    "chooseFiles": "Choose Files",
+    "uploadedDocuments": "Uploaded Documents ({{count}})",
+    "untitled": "Untitled"
+  },
+  "users": {
+    "myProfile": "My Profile",
+    "notLoggedIn": "Not Logged In",
+    "pleaseLogIn": "Please log in to view your profile.",
+    "activity": {
+      "loggedIn": "Logged in",
+      "updatedProfile": "Updated profile",
+      "addedToCart": "Added items to cart"
+    }
+  },
+  "cart": {
+    "empty": {
+      "title": "Your cart is empty",
+      "description": "Browse our add-ons and enhance your plan with additional features."
+    },
+    "orderComplete": "Order Complete",
+    "orderCompleteTitle": "Order Complete!",
+    "orderCompleteMessage": "Thank you for your purchase. Your add-ons have been activated and are ready to use.",
+    "orderId": "Order ID",
+    "viewMyFeatures": "View My Features",
+    "continueShopping": "Continue Shopping"
   }
 }

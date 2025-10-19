@@ -3,3 +3,5 @@ export { SignUp } from './SignUp';
 export { ActivateAccount } from './ActivateAccount';
 export { Dashboard } from './Dashboard';
 export { RagSettings } from './RagSettings';
+export { Users } from './Users';
+export { Cart } from './Cart';

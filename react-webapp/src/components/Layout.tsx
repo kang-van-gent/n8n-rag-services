@@ -23,7 +23,7 @@ export function Layout({ children, title }: LayoutProps) {
   const closeSidebar = () => setSidebarOpen(false);
 
   return (
-    <div className="flex h-screen bg-gradient-to-br from-white via-gray-50 to-gray-100 dark:from-black dark:via-gray-900 dark:to-gray-800 aura-bg relative overflow-hidden">
+    <div className="flex h-screen bg-gradient-to-br from-gray-50 via-gray-100 to-gray-200 dark:from-black dark:via-gray-900 dark:to-gray-800 aura-bg relative overflow-hidden">
       {/* Floating orbs */}
       <div className="floating-orb"></div>
       <div className="floating-orb"></div>

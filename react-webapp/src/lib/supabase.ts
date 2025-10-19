@@ -11,7 +11,7 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   }
 })
 
-// Database types (you can generate these with Supabase CLI later)
+// Database types for RAG Services
 export interface Database {
   public: {
     Tables: {
@@ -23,6 +23,7 @@ export interface Database {
           full_name: string | null
           avatar_url: string | null
           website: string | null
+          created_at: string
         }
         Insert: {
           id: string
@@ -31,6 +32,7 @@ export interface Database {
           full_name?: string | null
           avatar_url?: string | null
           website?: string | null
+          created_at?: string
         }
         Update: {
           id?: string
@@ -39,6 +41,117 @@ export interface Database {
           full_name?: string | null
           avatar_url?: string | null
           website?: string | null
+        }
+      }
+      tokens: {
+        Row: {
+          id: string
+          user_id: string | null
+          token: string
+          package: string
+          status: string
+          created_at: string | null
+          expiredAt: string | null
+          features: any // jsonb
+          addons: any // jsonb
+          type: string
+          systemMessage: string | null
+        }
+        Insert: {
+          id?: string
+          user_id?: string | null
+          token: string
+          package: string
+          status?: string
+          created_at?: string | null
+          expiredAt?: string | null
+          features?: any
+          addons?: any
+          type?: string
+          systemMessage?: string | null
+        }
+        Update: {
+          id?: string
+          user_id?: string | null
+          token?: string
+          package?: string
+          status?: string
+          expiredAt?: string | null
+          features?: any
+          addons?: any
+          type?: string
+          systemMessage?: string | null
+        }
+      }
+      payment_orders: {
+        Row: {
+          id: string
+          user_id: string
+          items: any // jsonb type
+          total_amount: number
+          currency: string
+          payment_method: string
+          status: string
+          created_at: string
+          completed_at: string | null
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          items: any
+          total_amount: number
+          currency?: string
+          payment_method: string
+          status?: string
+          created_at?: string
+          completed_at?: string | null
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          items?: any
+          total_amount?: number
+          currency?: string
+          payment_method?: string
+          status?: string
+          completed_at?: string | null
+        }
+      }
+      user_documents: {
+        Row: {
+          id: string
+          user_id: string
+          filename: string
+          file_path: string
+          file_size: number
+          content_type: string | null
+          upload_status: string
+          processed_status: string
+          created_at: string
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          filename: string
+          file_path: string
+          file_size: number
+          content_type?: string | null
+          upload_status?: string
+          processed_status?: string
+          created_at?: string
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          filename?: string
+          file_path?: string
+          file_size?: number
+          content_type?: string | null
+          upload_status?: string
+          processed_status?: string
+          updated_at?: string | null
         }
       }
     }
