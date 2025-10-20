@@ -253,7 +253,8 @@ export const PaymentMethodSelection: React.FC<PaymentMethodSelectionProps> = ({
         amount,
         currency,
         description,
-        selectedPaymentMethod
+        selectedPaymentMethod,
+        isSubscriptionPayment
       );
 
       // If there's a redirect URL (saved internet banking method), store payment data

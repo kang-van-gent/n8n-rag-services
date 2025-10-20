@@ -268,6 +268,19 @@ export function Users() {
   }) => {
     if (!user?.id || !paymentData.subscriptionContext) return;
 
+    // Validate that we have evidence of a successful payment
+    if (!paymentData.chargeId && !paymentData.orderId) {
+      console.error(
+        "Internet banking subscription failed: No payment evidence provided"
+      );
+      showAlertModal(
+        "Payment Verification Failed",
+        "Unable to verify payment success. No transaction ID received.",
+        "error"
+      );
+      return;
+    }
+
     try {
       // Create subscription record
       const newExpiryDate = new Date();
@@ -343,11 +356,18 @@ export function Users() {
         const renewalData = JSON.parse(pendingRenewal);
         localStorage.removeItem("pendingRenewal");
         setPendingRenewalData(renewalData);
-        // Complete the renewal
-        completeRenewal({
-          chargeId: renewalData.chargeId,
-          orderId: renewalData.orderId,
-        });
+        // Complete the renewal - use credit card flow if chargeId exists
+        if (renewalData.chargeId) {
+          await completeCreditCardRenewal({
+            chargeId: renewalData.chargeId,
+            orderId: renewalData.orderId,
+          });
+        } else {
+          completeRenewal({
+            chargeId: renewalData.chargeId,
+            orderId: renewalData.orderId,
+          });
+        }
       } else if (pendingUpgrade) {
         const upgradeData = JSON.parse(pendingUpgrade);
         localStorage.removeItem("pendingUpgrade");
@@ -592,7 +612,13 @@ export function Users() {
           return;
         }
 
-        await completeRenewal(result);
+        // For credit card payments, use the same flow as internet banking (subscription only)
+        if (result.chargeId) {
+          await completeCreditCardRenewal(result);
+        } else {
+          // For internet banking (saved methods), use the existing flow
+          await completeRenewal(result);
+        }
       } else {
         showAlertModal(
           "Payment Failed",
@@ -612,59 +638,197 @@ export function Users() {
     }
   };
 
+  const completeCreditCardRenewal = async (paymentResult: {
+    chargeId?: string;
+    orderId?: string;
+  }) => {
+    if (!pendingRenewalData || !user?.id) return;
+
+    // Validate that we have a successful payment (chargeId must be present for credit card)
+    if (!paymentResult.chargeId) {
+      console.error("Credit card renewal failed: No chargeId provided");
+      showAlertModal(
+        "Renewal Failed",
+        "Payment verification failed. No charge ID received.",
+        "error"
+      );
+      return;
+    }
+
+    try {
+      // Create subscription record only (like internet banking)
+      const newExpiryDate = new Date();
+      newExpiryDate.setMonth(newExpiryDate.getMonth() + 1); // Add 1 month
+
+      const subscriptionRecord = await SubscriptionService.createSubscription({
+        user_id: user.id,
+        plan_name: `${
+          pendingRenewalData.token.package.charAt(0).toUpperCase() +
+          pendingRenewalData.token.package.slice(1)
+        } Plan`,
+        plan_type: pendingRenewalData.token.package as
+          | "basic"
+          | "standard"
+          | "enterprise",
+        status: "active",
+        amount: pendingRenewalData.amount,
+        currency: pendingRenewalData.currency,
+        billing_cycle: "monthly",
+        started_at: new Date().toISOString(),
+        expires_at: newExpiryDate.toISOString(),
+        cancelled_at: null,
+        payment_method: "credit_card",
+        transaction_id: paymentResult.chargeId || null,
+      });
+
+      if (subscriptionRecord) {
+        // Renew the token using the new service
+        await TokenGenerationService.renewToken(
+          user.id,
+          pendingRenewalData.token
+        );
+
+        showAlertModal(
+          "Renewal Successful",
+          `Token renewed successfully! Paid ${PricingService.formatCurrency(
+            pendingRenewalData.amount,
+            pendingRenewalData.currency
+          )}`,
+          "success"
+        );
+
+        // Refresh the data
+        await loadSubscriptionData(user.id);
+      } else {
+        throw new Error("Failed to create subscription record");
+      }
+    } catch (error) {
+      console.error("Credit card renewal completion error:", error);
+      showAlertModal(
+        "Renewal Failed",
+        `Renewal processing failed: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`,
+        "error"
+      );
+    }
+  };
+
   const completeRenewal = async (paymentResult: {
     chargeId?: string;
     orderId?: string;
   }) => {
     if (!pendingRenewalData || !user?.id) return;
 
-    // Create subscription record for the renewal
-    const newExpiryDate = new Date();
-    newExpiryDate.setMonth(newExpiryDate.getMonth() + 1); // Add 1 month
-
-    const subscriptionRecord = await SubscriptionService.createSubscription({
-      user_id: user.id,
-      plan_name: `${
-        pendingRenewalData.token.package.charAt(0).toUpperCase() +
-        pendingRenewalData.token.package.slice(1)
-      } Plan`,
-      plan_type: pendingRenewalData.token.package as
-        | "basic"
-        | "standard"
-        | "enterprise",
-      status: "active",
-      amount: pendingRenewalData.amount,
-      currency: pendingRenewalData.currency,
-      billing_cycle: "monthly",
-      started_at: new Date().toISOString(),
-      expires_at: newExpiryDate.toISOString(),
-      cancelled_at: null,
-      payment_method: "internet_banking", // Will be updated based on actual payment method
-      transaction_id: paymentResult.chargeId || paymentResult.orderId || null,
-    });
-
-    if (subscriptionRecord) {
-      // Renew the token using the new service
-      await TokenGenerationService.renewToken(
-        user.id,
-        pendingRenewalData.token
+    // Validate that we have evidence of a successful payment
+    if (!paymentResult.chargeId && !paymentResult.orderId) {
+      console.error(
+        "Renewal failed: No payment evidence provided (no chargeId or orderId)"
       );
-
       showAlertModal(
-        "Renewal Successful",
-        `Token renewed successfully! Paid ${PricingService.formatCurrency(
-          pendingRenewalData.amount,
-          pendingRenewalData.currency
-        )}`,
-        "success"
+        "Renewal Failed",
+        "Payment verification failed. No payment confirmation received.",
+        "error"
       );
+      return;
+    }
 
-      // Refresh the data
-      await loadSubscriptionData(user.id);
-    } else {
+    try {
+      // 1. Create payment order for all payment methods (credit card + internet banking)
+      const renewalOrderData = {
+        user_id: user.id,
+        items: [
+          {
+            id: `renewal_${Date.now()}`,
+            feature: {
+              key: "token_renewal",
+              name: `${
+                pendingRenewalData.token.package.charAt(0).toUpperCase() +
+                pendingRenewalData.token.package.slice(1)
+              } Plan Renewal`,
+              description: `Monthly renewal for ${pendingRenewalData.token.package} plan`,
+              category: "subscription",
+            },
+            price: pendingRenewalData.amount,
+            period: "month",
+            quantity: 1,
+          },
+        ],
+        total_amount: pendingRenewalData.amount,
+        currency: pendingRenewalData.currency,
+        payment_method: paymentResult.chargeId
+          ? "credit_card"
+          : "internet_banking",
+        status: "completed" as const,
+        completed_at: new Date().toISOString(),
+      };
+
+      const { data: paymentOrder, error: orderError } = await supabase
+        .from("payment_orders")
+        .insert(renewalOrderData)
+        .select()
+        .single();
+
+      if (orderError) {
+        console.error("Error creating renewal payment order:", orderError);
+        throw new Error("Failed to create payment order for renewal");
+      }
+
+      // 2. Create subscription record for the renewal
+      const newExpiryDate = new Date();
+      newExpiryDate.setMonth(newExpiryDate.getMonth() + 1); // Add 1 month
+
+      const subscriptionRecord = await SubscriptionService.createSubscription({
+        user_id: user.id,
+        plan_name: `${
+          pendingRenewalData.token.package.charAt(0).toUpperCase() +
+          pendingRenewalData.token.package.slice(1)
+        } Plan`,
+        plan_type: pendingRenewalData.token.package as
+          | "basic"
+          | "standard"
+          | "enterprise",
+        status: "active",
+        amount: pendingRenewalData.amount,
+        currency: pendingRenewalData.currency,
+        billing_cycle: "monthly",
+        started_at: new Date().toISOString(),
+        expires_at: newExpiryDate.toISOString(),
+        cancelled_at: null,
+        payment_method: paymentResult.chargeId
+          ? "credit_card"
+          : "internet_banking",
+        transaction_id: paymentResult.chargeId || paymentResult.orderId || null,
+      });
+
+      if (subscriptionRecord) {
+        // 3. Renew the token using the new service
+        await TokenGenerationService.renewToken(
+          user.id,
+          pendingRenewalData.token
+        );
+
+        showAlertModal(
+          "Renewal Successful",
+          `Token renewed successfully! Paid ${PricingService.formatCurrency(
+            pendingRenewalData.amount,
+            pendingRenewalData.currency
+          )}. Order ID: ${paymentOrder.id}`,
+          "success"
+        );
+
+        // 4. Refresh the data
+        await loadSubscriptionData(user.id);
+      } else {
+        throw new Error("Failed to create subscription record");
+      }
+    } catch (error) {
+      console.error("Renewal completion error:", error);
       showAlertModal(
-        "Subscription Creation Failed",
-        "Payment was successful but subscription record creation failed.",
+        "Renewal Failed",
+        `Renewal processing failed: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`,
         "error"
       );
     }
@@ -2652,9 +2816,10 @@ Generated on: ${new Date().toLocaleString()}
                 ) : (
                   <div className="space-y-3">
                     {getAvailableUpgradePlans().map((plan) => (
-                      <div
+                      <button
                         key={plan.id}
-                        className="w-full p-4 border border-gray-200 dark:border-gray-600 rounded-lg transition-colors"
+                        onClick={() => handleUpgradePlan(plan.key)}
+                        className="w-full p-4 border border-gray-200 dark:border-gray-600 rounded-lg transition-colors hover:border-indigo-300 dark:hover:border-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-left"
                       >
                         <div className="flex items-center justify-between">
                           <div className="flex-1">
@@ -2694,7 +2859,7 @@ Generated on: ${new Date().toLocaleString()}
                           </div>
                           <ArrowRight className="w-5 h-5 text-gray-400" />
                         </div>
-                      </div>
+                      </button>
                     ))}
                   </div>
                 )}

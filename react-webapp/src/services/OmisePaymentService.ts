@@ -475,7 +475,8 @@ export class OmisePaymentService {
     amount: number,
     currency: string,
     description: string,
-    paymentMethodId: string
+    paymentMethodId: string,
+    isSubscriptionPayment: boolean = false
   ): Promise<{ success: boolean; orderId?: string; chargeId?: string; redirectUrl?: string; error?: string }> {
     try {
       // Get the payment method
@@ -516,7 +517,7 @@ export class OmisePaymentService {
           returnUri,
           failureUri,
           undefined, // items
-          false // isSubscriptionPayment - will be determined by the calling context
+          isSubscriptionPayment // pass the subscription payment flag
         );
       }
 
@@ -527,24 +528,31 @@ export class OmisePaymentService {
         return { success: false, error: 'Omise SDK not available' };
       }
 
-      // Create initial payment order record with pending status
-      const { data: order, error: orderError } = await supabase
-        .from('payment_orders')
-        .insert({
-          user_id: userId,
-          items: [{ type: 'credit_card', description: description || 'Cart purchase', amount: amount }],
-          total_amount: amount,
-          currency: currency,
-          description: description || 'Cart purchase',
-          payment_method: paymentMethod.brand || 'credit_card',
-          status: 'pending',
-        })
-        .select()
-        .single();
+      let order = null;
+      
+      // Only create payment order for non-subscription payments
+      if (!isSubscriptionPayment) {
+        // Create initial payment order record with pending status
+        const { data: orderData, error: orderError } = await supabase
+          .from('payment_orders')
+          .insert({
+            user_id: userId,
+            items: [{ type: 'credit_card', description: description || 'Cart purchase', amount: amount }],
+            total_amount: amount,
+            currency: currency,
+            description: description || 'Cart purchase',
+            payment_method: paymentMethod.brand || 'credit_card',
+            status: 'pending',
+          })
+          .select()
+          .single();
 
-      if (orderError) {
-        console.error('Error creating payment order:', orderError);
-        return { success: false, error: 'Failed to create payment order' };
+        if (orderError) {
+          console.error('Error creating payment order:', orderError);
+          return { success: false, error: 'Failed to create payment order' };
+        }
+        
+        order = orderData;
       }
 
       console.log('Creating Omise charge with card token...', {
@@ -562,7 +570,7 @@ export class OmisePaymentService {
         card: paymentMethod.omise_payment_method_id, // Use the stored card token
         description: description || 'Cart purchase from React App',
         metadata: {
-          order_id: order.id,
+          order_id: order?.id || 'subscription_payment',
           user_id: userId,
         }
       };
@@ -594,27 +602,33 @@ export class OmisePaymentService {
           // Charge created successfully - this will appear in your Omise dashboard!
           console.log('✅ Real Omise charge created successfully:', result.id);
           console.log('💰 Check your Omise dashboard for transaction:', result.id);
-          console.log('🔄 Updating payment order status to completed for order:', order.id);
+          
+          // Only update payment order if one was created (non-subscription payments)
+          if (order) {
+            console.log('🔄 Updating payment order status to completed for order:', order.id);
 
-          // Update payment order with success status and real charge ID
-          const { error: updateError, data: updatedOrder } = await supabase
-            .from('payment_orders')
-            .update({
-              status: 'completed',
-              completed_at: new Date().toISOString(),
-            })
-            .eq('id', order.id)
-            .select();
+            // Update payment order with success status and real charge ID
+            const { error: updateError, data: updatedOrder } = await supabase
+              .from('payment_orders')
+              .update({
+                status: 'completed',
+                completed_at: new Date().toISOString(),
+              })
+              .eq('id', order.id)
+              .select();
 
-          if (updateError) {
-            console.error('❌ Error updating payment order to completed:', updateError);
+            if (updateError) {
+              console.error('❌ Error updating payment order to completed:', updateError);
+            } else {
+              console.log('✅ Payment order updated successfully:', updatedOrder);
+            }
           } else {
-            console.log('✅ Payment order updated successfully:', updatedOrder);
+            console.log('🔄 Subscription payment - no payment order to update');
           }
 
           return {
             success: true,
-            orderId: order.id,
+            orderId: order?.id,
             chargeId: result.id, // Real Omise charge ID
           };
         } else {
@@ -622,16 +636,18 @@ export class OmisePaymentService {
           console.error('❌ Omise charge failed:', result);
           const errorMessage = result.message || 'Payment processing failed';
 
-          // Update payment order with failed status
-          const { error: updateError } = await supabase
-            .from('payment_orders')
-            .update({
-              status: 'failed',
-            })
-            .eq('id', order.id);
+          // Update payment order with failed status (only if order exists)
+          if (order) {
+            const { error: updateError } = await supabase
+              .from('payment_orders')
+              .update({
+                status: 'failed',
+              })
+              .eq('id', order.id);
 
-          if (updateError) {
-            console.error('Error updating payment order:', updateError);
+            if (updateError) {
+              console.error('Error updating payment order:', updateError);
+            }
           }
 
           return {
@@ -642,16 +658,18 @@ export class OmisePaymentService {
       } catch (apiError) {
         console.error('Error calling Omise API:', apiError);
         
-        // Update payment order with failed status
-        const { error: updateError } = await supabase
-          .from('payment_orders')
-          .update({
-            status: 'failed',
-          })
-          .eq('id', order.id);
+        // Update payment order with failed status (only if order exists)
+        if (order) {
+          const { error: updateError } = await supabase
+            .from('payment_orders')
+            .update({
+              status: 'failed',
+            })
+            .eq('id', order.id);
 
-        if (updateError) {
-          console.error('Error updating payment order:', updateError);
+          if (updateError) {
+            console.error('Error updating payment order:', updateError);
+          }
         }
 
         return {
