@@ -217,9 +217,110 @@ app.post('/api/customers', async (req, res) => {
     }
 });
 
+// Create internet banking charge endpoint (source + charge in one)
+app.post('/api/internet-banking-charge', async (req, res) => {
+    try {
+        console.log('🏦 Received internet banking charge request:', req.body);
+
+        const { source, amount, currency, description, return_uri, failure_uri, metadata } = req.body;
+
+        // Validate required fields
+        if (!source || !amount || !currency) {
+            return res.status(400).json({
+                error: 'Missing required fields: source, amount, or currency'
+            });
+        }
+
+        // Setup authentication for API calls
+        const authString = Buffer.from(OMISE_SECRET_KEY + ':').toString('base64');
+
+        console.log('🚀 Step 1: Creating source for internet banking...', source);
+
+        // Step 1: Create source
+        const sourceResponse = await fetch('https://api.omise.co/sources', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Basic ${authString}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(source),
+        });
+
+        const sourceResult = await sourceResponse.json();
+
+        console.log('📨 Source API response:', {
+            status: sourceResponse.status,
+            ok: sourceResponse.ok,
+            id: sourceResult.id,
+            object: sourceResult.object,
+            type: sourceResult.type
+        });
+
+        if (!sourceResponse.ok) {
+            console.error('❌ Source creation failed:', sourceResult);
+            return res.status(sourceResponse.status).json(sourceResult);
+        }
+
+        console.log('✅ Source created successfully:', sourceResult.id);
+
+        // Step 2: Create charge with source
+        const chargeData = {
+            amount: parseInt(amount),
+            currency: currency.toLowerCase(),
+            source: sourceResult.id,
+            description: description || 'Internet Banking Payment',
+            return_uri: return_uri,
+            failure_uri: failure_uri,
+            metadata: metadata || {}
+        };
+
+        console.log('🚀 Step 2: Creating charge with source...', chargeData);
+
+        const chargeResponse = await fetch('https://api.omise.co/charges', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Basic ${authString}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(chargeData),
+        });
+
+        const chargeResult = await chargeResponse.json();
+
+        console.log('📨 Charge API response:', {
+            status: chargeResponse.status,
+            ok: chargeResponse.ok,
+            id: chargeResult.id,
+            object: chargeResult.object,
+            status: chargeResult.status,
+            authorize_uri: chargeResult.authorize_uri
+        });
+
+        if (chargeResponse.ok) {
+            console.log('✅ Internet banking charge created successfully:', chargeResult.id);
+            res.json({
+                success: true,
+                charge: chargeResult,
+                source: sourceResult
+            });
+        } else {
+            console.error('❌ Charge creation failed:', chargeResult);
+            res.status(chargeResponse.status).json(chargeResult);
+        }
+
+    } catch (error) {
+        console.error('💥 Server error creating internet banking charge:', error);
+        res.status(500).json({
+            error: 'Internal server error',
+            message: error.message
+        });
+    }
+});
+
 // Start server
 app.listen(PORT, () => {
     console.log(`🚀 Omise Proxy Server running on http://localhost:${PORT}`);
     console.log(`🔗 Health check: http://localhost:${PORT}/health`);
     console.log(`💳 Charges endpoint: http://localhost:${PORT}/api/charges`);
+    console.log(`🏦 Internet Banking endpoint: http://localhost:${PORT}/api/internet-banking-charge`);
 });

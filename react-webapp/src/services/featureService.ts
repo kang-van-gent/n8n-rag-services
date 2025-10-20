@@ -28,8 +28,7 @@ export class FeatureService {
       if (error) throw error;
       return data || [];
     } catch (error) {
-      console.error('Error fetching features:', error);
-      throw error;
+      return [];
     }
   }
 
@@ -55,7 +54,6 @@ export class FeatureService {
 
       return data;
     } catch (error) {
-      console.error('Error fetching feature by key:', error);
       return null;
     }
   }
@@ -77,7 +75,6 @@ export class FeatureService {
       if (error) throw error;
       return data || [];
     } catch (error) {
-      console.error('Error fetching features by keys:', error);
       throw error;
     }
   }
@@ -97,7 +94,6 @@ export class FeatureService {
       if (error) throw error;
       return data || [];
     } catch (error) {
-      console.error('Error fetching features by category:', error);
       throw error;
     }
   }

@@ -33,7 +33,6 @@ export class SubscriptionService {
   static async createSubscriptionTable(): Promise<void> {
     const { error } = await supabase.rpc('create_subscription_table');
     if (error) {
-      console.error('Error creating subscription table:', error);
       throw error;
     }
   }
@@ -51,13 +50,11 @@ export class SubscriptionService {
         .limit(limit);
 
       if (error) {
-        console.error('Error fetching subscription history:', error);
         return [];
       }
 
       return data || [];
     } catch (error) {
-      console.error('Error in getSubscriptionHistory:', error);
       return [];
     }
   }
@@ -74,7 +71,6 @@ export class SubscriptionService {
         .order('created_at', { ascending: false });
 
       if (error) {
-        console.error('Error fetching subscription summary:', error);
         return this.getDefaultSummary();
       }
 
@@ -88,14 +84,13 @@ export class SubscriptionService {
       const currentStreak = this.calculateCurrentStreak(subscriptions);
 
       return {
-        total_subscriptions: subscriptions.length,
         active_subscription: activeSubscription,
+        total_subscriptions: subscriptions.length,
         total_spent: totalSpent,
         current_streak_months: currentStreak,
         first_subscription_date: firstSubscription?.started_at || null,
       };
     } catch (error) {
-      console.error('Error in getSubscriptionSummary:', error);
       return this.getDefaultSummary();
     }
   }
@@ -112,13 +107,11 @@ export class SubscriptionService {
         .single();
 
       if (error) {
-        console.error('Error creating subscription:', error);
         return null;
       }
 
       return data;
     } catch (error) {
-      console.error('Error in createSubscription:', error);
       return null;
     }
   }
@@ -147,13 +140,11 @@ export class SubscriptionService {
         .eq('id', subscriptionId);
 
       if (error) {
-        console.error('Error updating subscription status:', error);
         return false;
       }
 
       return true;
     } catch (error) {
-      console.error('Error in updateSubscriptionStatus:', error);
       return false;
     }
   }
@@ -175,13 +166,11 @@ export class SubscriptionService {
           // No rows returned
           return null;
         }
-        console.error('Error fetching active subscription:', error);
         return null;
       }
 
       return data;
     } catch (error) {
-      console.error('Error in getActiveSubscription:', error);
       return null;
     }
   }

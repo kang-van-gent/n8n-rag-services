@@ -137,7 +137,6 @@ export class UserService {
 
       return usersWithDetails;
     } catch (error) {
-      console.error('Error fetching users:', error);
       throw error;
     }
   }
@@ -150,7 +149,6 @@ export class UserService {
       const users = await this.getAllUsers();
       return users.find(user => user.id === userId) || null;
     } catch (error) {
-      console.error('Error fetching user:', error);
       throw error;
     }
   }
@@ -173,7 +171,6 @@ export class UserService {
       if (error) throw error;
       return data;
     } catch (error) {
-      console.error('Error updating user profile:', error);
       throw error;
     }
   }
@@ -197,7 +194,6 @@ export class UserService {
 
       if (error) throw error;
     } catch (error) {
-      console.error('Error deleting user:', error);
       throw error;
     }
   }
@@ -234,7 +230,6 @@ export class UserService {
         planDistribution
       };
     } catch (error) {
-      console.error('Error fetching user stats:', error);
       throw error;
     }
   }

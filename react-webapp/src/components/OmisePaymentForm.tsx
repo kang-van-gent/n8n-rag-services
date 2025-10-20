@@ -18,6 +18,10 @@ export function OmisePaymentForm({
   onError,
   autoSetDefault = false,
 }: OmisePaymentFormProps) {
+  const [paymentType, setPaymentType] = useState<"card" | "internet_banking">(
+    "card"
+  );
+  const [selectedBank, setSelectedBank] = useState("");
   const [formData, setFormData] = useState({
     cardNumber: "",
     expiryDate: "", // Display value for MM/YY input
@@ -48,6 +52,76 @@ export function OmisePaymentForm({
 
     checkOmiseReady();
   }, []);
+
+  // Internet Banking options for Thailand (Omise supported banks)
+  const internetBankingOptions = [
+    {
+      code: "bbl",
+      name: "Bangkok Bank",
+      color: "bg-blue-600",
+      textColor: "text-blue-600",
+      icon: (
+        <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold text-sm">
+          BBL
+        </div>
+      ),
+    },
+    {
+      code: "kbank",
+      name: "Kasikorn Bank",
+      color: "bg-green-600",
+      textColor: "text-green-600",
+      icon: (
+        <div className="w-8 h-8 bg-green-600 rounded-full flex items-center justify-center text-white font-bold text-xs">
+          KPLUS
+        </div>
+      ),
+    },
+    {
+      code: "ktb",
+      name: "Krung Thai Bank",
+      color: "bg-blue-500",
+      textColor: "text-blue-500",
+      icon: (
+        <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white font-bold text-sm">
+          KTB
+        </div>
+      ),
+    },
+    {
+      code: "scb",
+      name: "Siam Commercial Bank",
+      color: "bg-purple-600",
+      textColor: "text-purple-600",
+      icon: (
+        <div className="w-8 h-8 bg-purple-600 rounded-full flex items-center justify-center text-white font-bold text-sm">
+          SCB
+        </div>
+      ),
+    },
+    {
+      code: "bay",
+      name: "Krungsri Bank",
+      color: "bg-yellow-500",
+      textColor: "text-yellow-600",
+      icon: (
+        <div className="w-8 h-8 bg-yellow-500 rounded-full flex items-center justify-center text-white font-bold text-sm">
+          BAY
+        </div>
+      ),
+    },
+    {
+      code: "tmb",
+      name: "TMB Thanachart Bank",
+      color: "bg-orange-600",
+      textColor: "text-orange-600",
+      icon: (
+        <div className="w-8 h-8 bg-orange-600 rounded-full flex items-center justify-center text-white font-bold text-sm">
+          TMB
+        </div>
+      ),
+    },
+  ];
 
   // Format card number with spaces
   const formatCardNumber = (value: string) => {
@@ -112,6 +186,17 @@ export function OmisePaymentForm({
   };
 
   const validateForm = () => {
+    if (paymentType === "internet_banking") {
+      // Validate internet banking selection
+      if (!selectedBank) {
+        setErrors(["Please select a bank"]);
+        return false;
+      }
+      setErrors([]);
+      return true;
+    }
+
+    // Validate card data
     const expiryMonth = parseInt(formData.expiryMonth);
     const expiryYear = parseInt(formData.expiryYear);
 
@@ -140,28 +225,48 @@ export function OmisePaymentForm({
     setErrors([]);
 
     try {
-      const paymentMethodData: CreatePaymentMethodRequest = {
-        cardNumber: formData.cardNumber,
-        expiryMonth: parseInt(formData.expiryMonth),
-        expiryYear: parseInt(formData.expiryYear),
-        cardholderName: formData.cardholderName,
-        cvc: formData.cvc,
-        postalCode: formData.postalCode,
-        isDefault: formData.isDefault,
-      };
+      if (paymentType === "card") {
+        const paymentMethodData: CreatePaymentMethodRequest = {
+          cardNumber: formData.cardNumber,
+          expiryMonth: parseInt(formData.expiryMonth),
+          expiryYear: parseInt(formData.expiryYear),
+          cardholderName: formData.cardholderName,
+          cvc: formData.cvc,
+          postalCode: formData.postalCode,
+          isDefault: formData.isDefault,
+        };
 
-      const paymentMethod = await OmisePaymentService.createPaymentMethod(
-        userId,
-        paymentMethodData
-      );
-      const cartFormatMethod =
-        OmisePaymentService.convertToCartPaymentMethod(paymentMethod);
+        const paymentMethod = await OmisePaymentService.createPaymentMethod(
+          userId,
+          paymentMethodData
+        );
+        const cartFormatMethod =
+          OmisePaymentService.convertToCartPaymentMethod(paymentMethod);
 
-      console.log(
-        "Payment method created successfully, calling onSuccess:",
-        cartFormatMethod
-      );
-      onSuccess(cartFormatMethod);
+        console.log(
+          "Payment method created successfully, calling onSuccess:",
+          cartFormatMethod
+        );
+        onSuccess(cartFormatMethod);
+      } else if (paymentType === "internet_banking") {
+        // Save internet banking preference as a payment method
+        const bankInfo = internetBankingOptions.find(
+          (bank) => bank.code === selectedBank
+        );
+        const internetBankingMethod =
+          await OmisePaymentService.createInternetBankingMethod(
+            userId,
+            selectedBank,
+            bankInfo?.name || selectedBank,
+            formData.isDefault
+          );
+
+        console.log(
+          "Internet banking method saved, calling onSuccess:",
+          internetBankingMethod
+        );
+        onSuccess(internetBankingMethod);
+      }
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : "Failed to add payment method";
@@ -181,14 +286,20 @@ export function OmisePaymentForm({
         <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center">
-              <CreditCard className="w-5 h-5 text-white" />
+              {paymentType === "card" ? (
+                <CreditCard className="w-5 h-5 text-white" />
+              ) : (
+                <span className="text-white text-lg">🏦</span>
+              )}
             </div>
             <div>
               <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
                 Add Payment Method
               </h2>
               <p className="text-sm text-gray-600 dark:text-gray-400">
-                Securely add your card details
+                {paymentType === "card"
+                  ? "Securely add your card details"
+                  : "Choose your internet banking option"}
               </p>
             </div>
           </div>
@@ -219,153 +330,249 @@ export function OmisePaymentForm({
             </div>
           )}
 
-          {/* Card Number */}
+          {/* Payment Method Selection */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Card Number
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+              Payment Method
             </label>
-            <div className="relative">
-              <input
-                type="text"
-                value={formData.cardNumber}
-                onChange={(e) =>
-                  handleInputChange("cardNumber", e.target.value)
-                }
-                placeholder="4242 4242 4242 4242 (test card)"
-                maxLength={19}
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => setPaymentType("card")}
                 className={cn(
-                  "w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100 pr-16",
-                  touched.cardNumber &&
-                    errors.some((e) => e.includes("card number"))
-                    ? "border-red-300 dark:border-red-600"
-                    : "border-gray-300 dark:border-gray-600"
+                  "p-4 border-2 rounded-lg text-center transition-all duration-200",
+                  paymentType === "card"
+                    ? "border-indigo-500 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300"
+                    : "border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50"
                 )}
-              />
-              <div className="absolute right-3 top-1/2 -translate-y-1/2 text-sm font-medium text-gray-500">
-                {cardBrand}
-              </div>
+              >
+                <CreditCard className="w-6 h-6 mx-auto mb-2" />
+                <div className="text-sm font-medium">Credit Card</div>
+              </button>
+              <button
+                type="button"
+                onClick={() => setPaymentType("internet_banking")}
+                className={cn(
+                  "p-4 border-2 rounded-lg text-center transition-all duration-200",
+                  paymentType === "internet_banking"
+                    ? "border-indigo-500 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300"
+                    : "border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50"
+                )}
+              >
+                <div className="w-6 h-6 mx-auto mb-2 flex items-center justify-center">
+                  <svg
+                    className="w-6 h-6"
+                    fill="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path d="M2 8h20v2H2V8zm0 4h20v6c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2v-6zm0-8h20c1.1 0 2 .9 2 2v2H0V6c0-1.1.9-2 2-2z" />
+                    <circle cx="6" cy="15" r="1" />
+                    <circle cx="10" cy="15" r="1" />
+                  </svg>
+                </div>
+                <div className="text-sm font-medium">Internet Banking</div>
+              </button>
             </div>
           </div>
 
-          {/* Expiry and CVC */}
-          <div className="grid grid-cols-2 gap-4">
+          {/* Internet Banking Selection */}
+          {paymentType === "internet_banking" && (
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Expiry Date
+                Select Bank
               </label>
-              <input
-                type="text"
-                value={formData.expiryDate}
-                onChange={(e) =>
-                  handleInputChange("expiryDate", e.target.value)
-                }
-                placeholder="MM/YY"
-                maxLength={5}
-                className={cn(
-                  "w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100",
-                  touched.expiryDate && errors.some((e) => e.includes("expiry"))
-                    ? "border-red-300 dark:border-red-600"
-                    : "border-gray-300 dark:border-gray-600"
-                )}
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                CVC
-              </label>
-              <input
-                type="text"
-                value={formData.cvc}
-                onChange={(e) => handleInputChange("cvc", e.target.value)}
-                placeholder="123"
-                maxLength={4}
-                className={cn(
-                  "w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100",
-                  touched.cvc && errors.some((e) => e.includes("CVC"))
-                    ? "border-red-300 dark:border-red-600"
-                    : "border-gray-300 dark:border-gray-600"
-                )}
-              />
-            </div>
-          </div>
-
-          {/* Cardholder Name */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Cardholder Name
-            </label>
-            <input
-              type="text"
-              value={formData.cardholderName}
-              onChange={(e) =>
-                handleInputChange("cardholderName", e.target.value)
-              }
-              placeholder="John Doe"
-              className={cn(
-                "w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100",
-                touched.cardholderName && errors.some((e) => e.includes("name"))
-                  ? "border-red-300 dark:border-red-600"
-                  : "border-gray-300 dark:border-gray-600"
-              )}
-            />
-          </div>
-
-          {/* Postal Code (Optional) */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Postal Code <span className="text-gray-500">(Optional)</span>
-            </label>
-            <input
-              type="text"
-              value={formData.postalCode}
-              onChange={(e) => handleInputChange("postalCode", e.target.value)}
-              placeholder="12345"
-              className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100"
-            />
-          </div>
-
-          {/* Set as Default */}
-          <div className="flex items-center gap-3">
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={formData.isDefault}
-                onChange={(e) =>
-                  setFormData((prev) => ({
-                    ...prev,
-                    isDefault: e.target.checked,
-                  }))
-                }
-                className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-              />
-              <span className="text-sm text-gray-700 dark:text-gray-300">
-                Set as default payment method
-              </span>
-            </label>
-          </div>
-
-          {/* Test Card Notice */}
-          <div className="flex items-center gap-2 p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg">
-            <AlertCircle className="w-4 h-4 text-yellow-600 dark:text-yellow-400 flex-shrink-0" />
-            <div className="text-sm text-yellow-800 dark:text-yellow-300">
-              <div className="font-medium">
-                Development Mode - Use Test Cards
-              </div>
-              <div className="mt-1">
-                Visa: 4242 4242 4242 4242 | Mastercard: 5555 5555 5555 4444
-                <br />
-                Use any future date for expiry and any 3-digit CVC
+              <div className="grid grid-cols-1 gap-3 max-h-64 overflow-y-auto">
+                {internetBankingOptions.map((bank) => (
+                  <button
+                    key={bank.code}
+                    type="button"
+                    onClick={() => setSelectedBank(bank.code)}
+                    className={cn(
+                      "flex items-center gap-4 p-4 border-2 rounded-xl text-left transition-all duration-200 hover:shadow-md",
+                      selectedBank === bank.code
+                        ? "border-indigo-500 bg-indigo-50 dark:bg-indigo-900/30 shadow-md"
+                        : "border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700/30"
+                    )}
+                  >
+                    <div className="flex-shrink-0">{bank.icon}</div>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-semibold text-gray-900 dark:text-gray-100 truncate">
+                        {bank.name}
+                      </div>
+                      <div className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                        Internet Banking • {bank.code.toUpperCase()}
+                      </div>
+                    </div>
+                    {selectedBank === bank.code && (
+                      <div className="flex-shrink-0">
+                        <div className="w-6 h-6 bg-indigo-600 rounded-full flex items-center justify-center">
+                          <Check className="w-4 h-4 text-white" />
+                        </div>
+                      </div>
+                    )}
+                  </button>
+                ))}
               </div>
             </div>
-          </div>
+          )}
 
-          {/* Security Notice */}
-          <div className="flex items-center gap-2 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-            <Lock className="w-4 h-4 text-blue-600 dark:text-blue-400 flex-shrink-0" />
-            <span className="text-sm text-blue-800 dark:text-blue-300">
-              Your card details are encrypted and processed securely by Omise
-            </span>
-          </div>
+          {/* Card Form Fields (only show for card payment) */}
+          {paymentType === "card" && (
+            <>
+              {/* Card Number */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Card Number
+                </label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={formData.cardNumber}
+                    onChange={(e) =>
+                      handleInputChange("cardNumber", e.target.value)
+                    }
+                    placeholder="4242 4242 4242 4242 (test card)"
+                    maxLength={19}
+                    className={cn(
+                      "w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100 pr-16",
+                      touched.cardNumber &&
+                        errors.some((e) => e.includes("card number"))
+                        ? "border-red-300 dark:border-red-600"
+                        : "border-gray-300 dark:border-gray-600"
+                    )}
+                  />
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2 text-sm font-medium text-gray-500">
+                    {cardBrand}
+                  </div>
+                </div>
+              </div>
+
+              {/* Expiry and CVC */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Expiry Date
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.expiryDate}
+                    onChange={(e) =>
+                      handleInputChange("expiryDate", e.target.value)
+                    }
+                    placeholder="MM/YY"
+                    maxLength={5}
+                    className={cn(
+                      "w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100",
+                      touched.expiryDate &&
+                        errors.some((e) => e.includes("expiry"))
+                        ? "border-red-300 dark:border-red-600"
+                        : "border-gray-300 dark:border-gray-600"
+                    )}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    CVC
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.cvc}
+                    onChange={(e) => handleInputChange("cvc", e.target.value)}
+                    placeholder="123"
+                    maxLength={4}
+                    className={cn(
+                      "w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100",
+                      touched.cvc && errors.some((e) => e.includes("CVC"))
+                        ? "border-red-300 dark:border-red-600"
+                        : "border-gray-300 dark:border-gray-600"
+                    )}
+                  />
+                </div>
+              </div>
+
+              {/* Cardholder Name */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Cardholder Name
+                </label>
+                <input
+                  type="text"
+                  value={formData.cardholderName}
+                  onChange={(e) =>
+                    handleInputChange("cardholderName", e.target.value)
+                  }
+                  placeholder="John Doe"
+                  className={cn(
+                    "w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100",
+                    touched.cardholderName &&
+                      errors.some((e) => e.includes("name"))
+                      ? "border-red-300 dark:border-red-600"
+                      : "border-gray-300 dark:border-gray-600"
+                  )}
+                />
+              </div>
+
+              {/* Postal Code (Optional) */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Postal Code <span className="text-gray-500">(Optional)</span>
+                </label>
+                <input
+                  type="text"
+                  value={formData.postalCode}
+                  onChange={(e) =>
+                    handleInputChange("postalCode", e.target.value)
+                  }
+                  placeholder="12345"
+                  className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100"
+                />
+              </div>
+
+              {/* Set as Default */}
+              <div className="flex items-center gap-3">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={formData.isDefault}
+                    onChange={(e) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        isDefault: e.target.checked,
+                      }))
+                    }
+                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                  />
+                  <span className="text-sm text-gray-700 dark:text-gray-300">
+                    Set as default payment method
+                  </span>
+                </label>
+              </div>
+
+              {/* Test Card Notice */}
+              <div className="flex items-center gap-2 p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg">
+                <AlertCircle className="w-4 h-4 text-yellow-600 dark:text-yellow-400 flex-shrink-0" />
+                <div className="text-sm text-yellow-800 dark:text-yellow-300">
+                  <div className="font-medium">
+                    Development Mode - Use Test Cards
+                  </div>
+                  <div className="mt-1">
+                    Visa: 4242 4242 4242 4242 | Mastercard: 5555 5555 5555 4444
+                    <br />
+                    Use any future date for expiry and any 3-digit CVC
+                  </div>
+                </div>
+              </div>
+
+              {/* Security Notice */}
+              <div className="flex items-center gap-2 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                <Lock className="w-4 h-4 text-blue-600 dark:text-blue-400 flex-shrink-0" />
+                <span className="text-sm text-blue-800 dark:text-blue-300">
+                  Your {paymentType === "card" ? "card" : "banking"} details are
+                  encrypted and processed securely by Omise
+                </span>
+              </div>
+            </>
+          )}
 
           {/* Buttons */}
           <div className="flex gap-3 pt-4">
@@ -394,7 +601,7 @@ export function OmisePaymentForm({
               ) : (
                 <>
                   <Check className="w-4 h-4" />
-                  Add Payment Method
+                  {paymentType === "card" ? "Add Card" : "Select Bank"}
                 </>
               )}
             </button>

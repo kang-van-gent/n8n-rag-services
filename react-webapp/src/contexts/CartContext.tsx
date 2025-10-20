@@ -23,7 +23,12 @@ export interface CartItem {
 
 export interface PaymentMethod {
   id: string;
-  type: "credit_card" | "paypal" | "bank_transfer" | "crypto";
+  type:
+    | "credit_card"
+    | "paypal"
+    | "bank_transfer"
+    | "crypto"
+    | "internet_banking";
   displayName: string;
   details: {
     cardNumber?: string; // Last 4 digits for credit cards
@@ -31,6 +36,7 @@ export interface PaymentMethod {
     cardholderName?: string;
     paypalEmail?: string;
     bankName?: string;
+    bankCode?: string; // For internet banking
     accountNumber?: string; // Last 4 digits
     cryptoAddress?: string;
   };
@@ -59,6 +65,8 @@ interface CartContextType {
   checkout: () => Promise<{
     success: boolean;
     orderId?: string;
+    chargeId?: string;
+    redirectUrl?: string;
     error?: string;
   }>;
 }
@@ -248,6 +256,8 @@ export function CartProvider({ children }: CartProviderProps) {
   const checkout = async (): Promise<{
     success: boolean;
     orderId?: string;
+    chargeId?: string;
+    redirectUrl?: string;
     error?: string;
   }> => {
     try {
@@ -269,13 +279,36 @@ export function CartProvider({ children }: CartProviderProps) {
       const total = subtotal + tax;
 
       // Process payment with Omise
-      const paymentResult = await OmisePaymentService.processPayment(
-        user.id,
-        total,
-        "THB",
-        `Purchase of ${items.length} add-on(s)`,
-        selectedPaymentMethod.id
-      );
+      let paymentResult: {
+        success: boolean;
+        orderId?: string;
+        chargeId?: string;
+        redirectUrl?: string;
+        error?: string;
+      };
+
+      if (selectedPaymentMethod.type === "internet_banking") {
+        // For internet banking, create a charge with source
+        paymentResult = await OmisePaymentService.processInternetBankingPayment(
+          user.id,
+          total,
+          "THB",
+          `Purchase of ${items.length} add-on(s)`,
+          selectedPaymentMethod.details.bankCode || "",
+          `${window.location.origin}/cart?payment=success`,
+          `${window.location.origin}/cart?payment=failed`,
+          items // Pass cart items to create proper order
+        );
+      } else {
+        // For credit cards, use existing flow
+        paymentResult = await OmisePaymentService.processPayment(
+          user.id,
+          total,
+          "THB",
+          `Purchase of ${items.length} add-on(s)`,
+          selectedPaymentMethod.id
+        );
+      }
 
       if (!paymentResult.success) {
         return {
@@ -284,7 +317,17 @@ export function CartProvider({ children }: CartProviderProps) {
         };
       }
 
-      // Update the order record with cart items
+      // Handle internet banking redirect
+      if (paymentResult.redirectUrl) {
+        // For internet banking, return redirect information to Cart component
+        // Let Cart component handle the redirect (same as handleInternetBankingCheckout)
+        return {
+          success: true,
+          orderId: paymentResult.orderId,
+          chargeId: paymentResult.chargeId,
+          redirectUrl: paymentResult.redirectUrl,
+        };
+      } // Update the order record with cart items
       if (paymentResult.orderId) {
         const { error: updateError } = await supabase
           .from("payment_orders")

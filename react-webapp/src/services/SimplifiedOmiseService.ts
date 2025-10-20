@@ -10,6 +10,11 @@ declare global {
         data: CardData, 
         callback: (statusCode: number, response: TokenResponse) => void
       ): void;
+      createSource(
+        type: string,
+        data: any,
+        callback: (statusCode: number, response: any) => void
+      ): void;
       setPublicKey(key: string): void;
     };
   }
@@ -150,7 +155,6 @@ export class SimplifiedOmiseService {
         .maybeSingle();
 
       if (fetchError) {
-        console.error('Error fetching billing profile:', fetchError);
         // Continue to create a new profile
       }
 
@@ -172,13 +176,11 @@ export class SimplifiedOmiseService {
         .single();
 
       if (createError) {
-        console.error('Error creating billing profile:', createError);
         throw new Error('Failed to create billing profile');
       }
 
       return newProfile;
     } catch (error) {
-      console.error('Error in getOrCreateBillingProfile:', error);
       throw new Error('Failed to setup billing profile');
     }
   }
@@ -258,14 +260,12 @@ export class SimplifiedOmiseService {
             .single();
 
           if (error) {
-            console.error('Error saving payment method:', error);
             reject(new Error('Failed to save payment method'));
             return;
           }
 
           resolve(newMethod);
         } catch (error) {
-          console.error('Error processing payment method:', error);
           reject(new Error('Failed to process payment method'));
         }
       });
@@ -282,13 +282,11 @@ export class SimplifiedOmiseService {
         .order('created_at', { ascending: false });
 
       if (error) {
-        console.error('Error fetching payment methods:', error);
         return [];
       }
 
       return data || [];
     } catch (error) {
-      console.error('Error in getUserPaymentMethods:', error);
       return [];
     }
   }
@@ -303,11 +301,9 @@ export class SimplifiedOmiseService {
         .eq('user_id', userId);
 
       if (error) {
-        console.error('Error deleting payment method:', error);
         throw new Error('Failed to delete payment method');
       }
     } catch (error) {
-      console.error('Error in deletePaymentMethod:', error);
       throw error;
     }
   }
@@ -329,11 +325,9 @@ export class SimplifiedOmiseService {
         .eq('user_id', userId);
 
       if (error) {
-        console.error('Error setting default payment method:', error);
         throw new Error('Failed to set default payment method');
       }
     } catch (error) {
-      console.error('Error in setDefaultPaymentMethod:', error);
       throw error;
     }
   }
@@ -364,18 +358,17 @@ export class SimplifiedOmiseService {
         .from('payment_orders')
         .insert({
           user_id: userId,
-          amount: amount,
+          items: [{ type: 'credit_card', description: description, amount: amount, payment_method_id: paymentMethodId }],
+          total_amount: amount,
           currency: currency,
           description: description,
-          payment_method_id: paymentMethodId,
+          payment_method: 'credit_card',
           status: 'completed', // Mock success for development
-          omise_charge_id: `charge_test_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
         })
         .select()
         .single();
 
       if (orderError) {
-        console.error('Error creating payment order:', orderError);
         return { success: false, error: 'Failed to create payment order' };
       }
 
@@ -390,7 +383,6 @@ export class SimplifiedOmiseService {
         chargeId: order.omise_charge_id,
       };
     } catch (error) {
-      console.error('Error processing payment:', error);
       return { success: false, error: 'Payment processing failed' };
     }
   }

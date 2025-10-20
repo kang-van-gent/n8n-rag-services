@@ -40,7 +40,6 @@ export class PaymentService {
         .single();
 
       if (orderError) {
-        console.error('Error creating order:', orderError);
         return { success: false, error: 'Failed to create order' };
       }
 
@@ -61,7 +60,6 @@ export class PaymentService {
       const addOnResult = await this.addAddOnsToToken(userId, items);
       
       if (!addOnResult.success) {
-        console.error('Failed to add add-ons to token:', addOnResult.error);
         // Note: Payment succeeded but add-on activation failed
         // In production, you might want to handle this differently
       }
@@ -81,7 +79,6 @@ export class PaymentService {
       };
 
     } catch (error) {
-      console.error('Payment processing error:', error);
       return { 
         success: false, 
         error: error instanceof Error ? error.message : 'Payment processing failed' 
@@ -147,17 +144,13 @@ export class PaymentService {
       const updatedAddOns = [...existingAddOns, ...filteredNewAddOns];
 
       // Update token with new add-ons
-      console.log('About to update token with addons:', updatedAddOns);
-      
       await TokenService.updateTokenFeatures(userId, {
         addons: updatedAddOns
       });
 
-      console.log('Successfully updated token with new add-ons');
       return { success: true };
 
     } catch (error) {
-      console.error('Error adding add-ons to token:', error);
       return { 
         success: false, 
         error: error instanceof Error ? error.message : 'Failed to activate add-ons' 
@@ -200,7 +193,6 @@ export class PaymentService {
       if (error) throw error;
       return data || [];
     } catch (error) {
-      console.error('Error fetching user orders:', error);
       return [];
     }
   }

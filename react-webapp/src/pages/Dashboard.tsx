@@ -53,7 +53,6 @@ export function Dashboard() {
       const analytics = await ChatService.getChatAnalytics(user.id);
       setChatAnalytics(analytics);
     } catch (error) {
-      console.error("Error loading chat analytics:", error);
     } finally {
       setAnalyticsLoading(false);
     }
@@ -65,9 +64,7 @@ export function Dashboard() {
     try {
       const analytics = await OrderService.getOrderAnalytics(user.id);
       setOrderAnalytics(analytics);
-    } catch (error) {
-      console.error("Error loading order analytics:", error);
-    }
+    } catch (error) {}
   };
 
   const userName =

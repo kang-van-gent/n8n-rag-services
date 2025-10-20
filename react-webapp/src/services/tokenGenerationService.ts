@@ -107,7 +107,6 @@ export class TokenGenerationService {
       if (error) throw error;
       return data;
     } catch (error) {
-      console.error('Error creating token:', error);
       throw error;
     }
   }
@@ -134,7 +133,6 @@ export class TokenGenerationService {
       if (error) throw error;
       return data;
     } catch (error) {
-      console.error('Error renewing token:', error);
       throw error;
     }
   }

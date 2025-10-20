@@ -74,7 +74,6 @@ export class TokenFeatureService {
           // Handle legacy format where key might be in id (before underscore)
           addonKey = addon.id.split('_')[0];
         } else {
-          console.warn('Invalid addon format:', addon);
           return;
         }
         
@@ -196,7 +195,6 @@ export class TokenFeatureService {
 
     // Ensure featureKey is a string and handle edge cases
     if (typeof featureKey !== 'string') {
-      console.warn('Feature key is not a string:', featureKey);
       return 'Unknown Feature';
     }
 

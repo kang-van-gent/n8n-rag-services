@@ -23,26 +23,24 @@ export class OrderService {
 
       // Get new orders today
       const { data: newOrdersData, error: newOrdersError } = await supabase
-        .from('orders')
+        .from('payment_orders')
         .select('id')
         .eq('user_id', userId)
         .gte('created_at', `${today}T00:00:00.000Z`)
         .lt('created_at', `${today}T23:59:59.999Z`);
 
       if (newOrdersError) {
-        console.error('Error fetching new orders:', newOrdersError);
       }
 
       const newOrdersToday = newOrdersData?.length || 0;
 
       // Get total orders
       const { data: allOrdersData, error: allOrdersError } = await supabase
-        .from('orders')
+        .from('payment_orders')
         .select('id, total_amount')
         .eq('user_id', userId);
 
       if (allOrdersError) {
-        console.error('Error fetching all orders:', allOrdersError);
       }
 
       const totalOrders = allOrdersData?.length || 0;
@@ -56,12 +54,11 @@ export class OrderService {
         averageOrderValue,
       };
     } catch (error) {
-      console.error('Error getting order analytics:', error);
       return {
-        newOrdersToday: 0,
         totalOrders: 0,
+        newOrdersToday: 0,
         totalRevenue: 0,
-        averageOrderValue: 0,
+        averageOrderValue: 0
       };
     }
   }
@@ -76,7 +73,7 @@ export class OrderService {
       startDate.setDate(endDate.getDate() - days);
 
       const { data, error } = await supabase
-        .from('orders')
+        .from('payment_orders')
         .select('created_at, total_amount')
         .eq('user_id', userId)
         .gte('created_at', startDate.toISOString())
@@ -84,7 +81,6 @@ export class OrderService {
         .order('created_at', { ascending: true });
 
       if (error) {
-        console.error('Error fetching daily order stats:', error);
         return [];
       }
 
@@ -114,7 +110,6 @@ export class OrderService {
         revenue: stats.revenue,
       }));
     } catch (error) {
-      console.error('Error getting daily order stats:', error);
       return [];
     }
   }
@@ -129,7 +124,7 @@ export class OrderService {
       startDate.setDate(endDate.getDate() - (weeks * 7));
 
       const { data, error } = await supabase
-        .from('orders')
+        .from('payment_orders')
         .select('created_at, total_amount')
         .eq('user_id', userId)
         .gte('created_at', startDate.toISOString())
@@ -137,7 +132,6 @@ export class OrderService {
         .order('created_at', { ascending: true });
 
       if (error) {
-        console.error('Error fetching weekly order stats:', error);
         return [];
       }
 
@@ -172,7 +166,6 @@ export class OrderService {
         revenue: stats.revenue,
       }));
     } catch (error) {
-      console.error('Error getting weekly order stats:', error);
       return [];
     }
   }
@@ -187,7 +180,7 @@ export class OrderService {
       startDate.setMonth(endDate.getMonth() - months);
 
       const { data, error } = await supabase
-        .from('orders')
+        .from('payment_orders')
         .select('created_at, total_amount')
         .eq('user_id', userId)
         .gte('created_at', startDate.toISOString())
@@ -195,7 +188,6 @@ export class OrderService {
         .order('created_at', { ascending: true });
 
       if (error) {
-        console.error('Error fetching monthly order stats:', error);
         return [];
       }
 
@@ -226,52 +218,21 @@ export class OrderService {
         revenue: stats.revenue,
       }));
     } catch (error) {
-      console.error('Error getting monthly order stats:', error);
       return [];
     }
   }
 
   /**
-   * Get user's order history from the orders table
+   * Get user's order history from the payment_orders table
+   * Note: This is currently returning empty array as the 'orders' table doesn't exist
+   * All actual order data is handled by PaymentService.getUserOrders()
    */
   static async getUserOrders(userId: string): Promise<any[]> {
     try {
-      const { data, error } = await supabase
-        .from('orders')
-        .select(`
-          id,
-          order_number,
-          status,
-          total_amount,
-          currency,
-          customer_name,
-          customer_email,
-          created_at,
-          updated_at,
-          shipped_at,
-          delivered_at,
-          order_items:order_items(
-            id,
-            product_name,
-            product_sku,
-            product_description,
-            unit_price,
-            quantity,
-            line_total,
-            product_category
-          )
-        `)
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false });
-
-      if (error) {
-        console.error('Error fetching user orders:', error);
-        return [];
-      }
-
-      return data || [];
+      // Return empty array for now since there's no separate 'orders' table
+      // All order data is in 'payment_orders' table and handled by PaymentService
+      return [];
     } catch (error) {
-      console.error('Error in getUserOrders:', error);
       return [];
     }
   }

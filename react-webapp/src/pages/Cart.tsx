@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   ShoppingCart,
   Trash2,
@@ -20,12 +20,17 @@ import { useTranslation } from "react-i18next";
 import { Layout } from "../components/Layout";
 import { useCart, PaymentMethod } from "../contexts/CartContext";
 import { useAuth } from "../contexts/AuthContext";
+import { useToken } from "../contexts/TokenContext";
+import { OmisePaymentService } from "../services/OmisePaymentService";
+import { TokenService } from "../services/tokenService";
 import OmisePaymentForm from "../components/OmisePaymentForm";
 import { cn } from "../utils/cn";
+import { supabase } from "../lib/supabase";
 
 export function Cart() {
   const { t } = useTranslation();
   const { user } = useAuth();
+  const { refreshToken } = useToken();
   const {
     items,
     totalAmount,
@@ -47,6 +52,74 @@ export function Cart() {
   const [showPaymentForm, setShowPaymentForm] = useState(false);
   const [orderId, setOrderId] = useState<string | null>(null);
   const [isCheckoutMode, setIsCheckoutMode] = useState(false); // Track if payment form was opened from checkout
+
+  // Handle payment returns from internet banking
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const paymentStatus = urlParams.get("payment");
+
+    if (paymentStatus === "success") {
+      // Handle successful payment return
+      const pendingCheckout = localStorage.getItem("pendingCartCheckout");
+
+      if (pendingCheckout) {
+        const checkoutData = JSON.parse(pendingCheckout);
+        localStorage.removeItem("pendingCartCheckout");
+
+        // Add purchased add-ons to user's token and update payment order status
+        if (user && checkoutData.items) {
+          Promise.all([
+            // Add add-ons to token
+            TokenService.addAddonsToToken(user.id, checkoutData.items),
+            // Update payment order status to completed
+            checkoutData.orderId
+              ? supabase
+                  .from("payment_orders")
+                  .update({
+                    status: "completed",
+                    completed_at: new Date().toISOString(),
+                  })
+                  .eq("id", checkoutData.orderId)
+              : Promise.resolve(),
+          ])
+            .then(() => {
+              console.log(
+                "✅ Add-ons added to user token and payment order updated after internet banking payment:",
+                checkoutData.items
+              );
+              // Refresh token context to show new add-ons immediately
+              if (refreshToken) {
+                refreshToken();
+              }
+            })
+            .catch((error) => {
+              console.error(
+                "Failed to add add-ons to token or update payment order after payment:",
+                error
+              );
+            });
+        }
+
+        // Clear cart and show success
+        clearCart();
+        setCheckoutSuccess(true);
+        setOrderId(checkoutData.orderId);
+      }
+
+      // Clean up URL
+      window.history.replaceState({}, document.title, window.location.pathname);
+    } else if (paymentStatus === "failed") {
+      setCheckoutError(
+        "Internet banking payment was cancelled or failed. Please try again."
+      );
+
+      // Clean up any stored pending data
+      localStorage.removeItem("pendingCartCheckout");
+
+      // Clean up URL
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  }, [clearCart]);
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat("th-TH", {
@@ -75,13 +148,91 @@ export function Cart() {
 
     try {
       const result = await checkout();
+
       if (result.success) {
+        // Handle redirect for internet banking (same as handleInternetBankingCheckout)
+        if (result.redirectUrl) {
+          // Save cart state for return handling
+          localStorage.setItem(
+            "pendingCartCheckout",
+            JSON.stringify({
+              orderId: result.orderId,
+              chargeId: result.chargeId,
+              items: items,
+            })
+          );
+
+          window.location.href = result.redirectUrl;
+          return;
+        }
+
+        // Direct success (no redirect needed)
         setCheckoutSuccess(true);
         setOrderId(result.orderId || null);
       } else {
         setCheckoutError(result.error || "Checkout failed");
       }
     } catch (error) {
+      setCheckoutError("An unexpected error occurred");
+    } finally {
+      setIsCheckingOut(false);
+    }
+  };
+
+  const handleInternetBankingCheckout = async () => {
+    if (!user?.id) {
+      setCheckoutError("Please log in to continue");
+      return;
+    }
+
+    if (items.length === 0) {
+      setCheckoutError("Your cart is empty");
+      return;
+    }
+
+    setIsCheckingOut(true);
+    setCheckoutError(null);
+
+    try {
+      // Calculate total with tax
+      const subtotal = totalAmount;
+      const tax = subtotal * 0.07; // 7% tax
+      const total = subtotal + tax;
+
+      const result = await OmisePaymentService.processInternetBankingWithModal(
+        user.id,
+        total,
+        "THB",
+        `Purchase of ${items.length} add-on(s)`,
+        items
+      );
+
+      if (result.success) {
+        // Handle redirect for internet banking
+        if (result.redirectUrl) {
+          // Save cart state for return handling
+          localStorage.setItem(
+            "pendingCartCheckout",
+            JSON.stringify({
+              orderId: result.orderId,
+              chargeId: result.chargeId,
+              items: items,
+            })
+          );
+
+          window.location.href = result.redirectUrl;
+          return;
+        }
+
+        // Direct success (no redirect needed)
+        clearCart();
+        setCheckoutSuccess(true);
+        setOrderId(result.orderId || null);
+      } else {
+        setCheckoutError(result.error || "Payment failed");
+      }
+    } catch (error) {
+      console.error("Internet banking checkout error:", error);
       setCheckoutError("An unexpected error occurred");
     } finally {
       setIsCheckingOut(false);
@@ -126,6 +277,14 @@ export function Cart() {
         return (
           <div className="w-5 h-5 bg-orange-500 rounded flex items-center justify-center text-white text-xs font-bold">
             ₿
+          </div>
+        );
+      case "internet_banking":
+        return (
+          <div className="w-5 h-5 bg-gradient-to-br from-blue-600 to-blue-700 dark:from-blue-500 dark:to-blue-600 rounded-md flex items-center justify-center text-white shadow-sm">
+            <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M12 3L2 8v2h20V8l-10-5zM4 12v6c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2v-6H4zm4 5c-.6 0-1-.4-1-1s.4-1 1-1 1 .4 1 1-.4 1-1 1zm4 0c-.6 0-1-.4-1-1s.4-1 1-1 1 .4 1 1-.4 1-1 1z" />
+            </svg>
           </div>
         );
       default:
@@ -442,7 +601,7 @@ export function Cart() {
                   </div>
                 )}
 
-                {/* Checkout Button */}
+                {/* Checkout Buttons */}
                 <div className="mt-6">
                   {checkoutError && (
                     <div className="flex items-center gap-2 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg mb-4">
@@ -453,10 +612,11 @@ export function Cart() {
                     </div>
                   )}
 
+                  {/* Primary Checkout Button */}
                   <button
                     onClick={handleCheckout}
                     disabled={isCheckingOut}
-                    className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded-lg font-medium transition-colors disabled:cursor-not-allowed"
+                    className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded-lg font-medium transition-colors disabled:cursor-not-allowed mb-3"
                   >
                     {isCheckingOut ? (
                       <>
@@ -469,6 +629,32 @@ export function Cart() {
                         {paymentMethods.length === 0
                           ? "Continue to Payment"
                           : t("cart.secureCheckout")}
+                        <ArrowRight className="w-4 h-4" />
+                      </>
+                    )}
+                  </button>
+
+                  {/* Internet Banking Button */}
+                  <button
+                    onClick={handleInternetBankingCheckout}
+                    disabled={isCheckingOut}
+                    className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-700 hover:to-green-700 disabled:bg-gray-400 text-white rounded-lg font-medium transition-all duration-200 disabled:cursor-not-allowed"
+                  >
+                    {isCheckingOut ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        Processing...
+                      </>
+                    ) : (
+                      <>
+                        <svg
+                          className="w-5 h-5"
+                          fill="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" />
+                        </svg>
+                        Pay with Internet Banking
                         <ArrowRight className="w-4 h-4" />
                       </>
                     )}

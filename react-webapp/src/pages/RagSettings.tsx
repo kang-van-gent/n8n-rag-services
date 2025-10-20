@@ -170,7 +170,6 @@ export function RagSettings() {
         const features = await FeatureService.getAllFeatures();
         setDbFeatures(features);
       } catch (error) {
-        console.error("Error fetching features:", error);
         setDbFeatures([]);
       } finally {
         setFeaturesLoading(false);
@@ -193,7 +192,6 @@ export function RagSettings() {
         const keys = await CredentialService.getUserKeys(user.id);
         setUserKeys(keys);
       } catch (error) {
-        console.error("Error fetching credentials:", error);
         setUserKeys([]);
       } finally {
         setCredentialsLoading(false);
@@ -273,14 +271,6 @@ export function RagSettings() {
         throw new Error(authCheck.error || "Authentication required");
       }
 
-      console.log("Creating credential for:", {
-        userId: user.id,
-        authenticatedUserId: authCheck.userId,
-        featureKey: selectedFeature.key,
-        hasAccessToken: !!credentialForm.accessToken,
-        hasRecipientId: !!credentialForm.recipientId,
-      });
-
       // Create credential using CredentialService
       const newCredential = await CredentialService.createCredential(
         user.id,
@@ -288,8 +278,6 @@ export function RagSettings() {
         credentialForm.accessToken,
         credentialForm.recipientId
       );
-
-      console.log("Credential created successfully:", newCredential);
 
       // Refresh user keys
       const keys = await CredentialService.getUserKeys(user.id);
@@ -303,8 +291,6 @@ export function RagSettings() {
       // Auto-hide success message after 3 seconds
       setTimeout(() => setSaveSuccess(false), 3000);
     } catch (error) {
-      console.error("Error creating credential:", error);
-
       // Provide more specific error messages
       let errorMessage = "Failed to save credentials";
 
@@ -344,7 +330,7 @@ export function RagSettings() {
       setWebhookCopied(true);
       setTimeout(() => setWebhookCopied(false), 2000);
     } catch (err) {
-      console.error("Failed to copy webhook URL:", err);
+      // Copy failed
     }
   };
 
@@ -354,7 +340,7 @@ export function RagSettings() {
       const documents = await DocumentService.getUserDocuments(user.id);
       setUserDocuments(documents);
     } catch (error) {
-      console.error("Error fetching documents:", error);
+      // Error fetching documents
     }
   };
 
@@ -441,7 +427,6 @@ export function RagSettings() {
       // Auto-hide success message after 3 seconds
       setTimeout(() => setSystemMessageSuccess(false), 3000);
     } catch (error) {
-      console.error("Error updating system message:", error);
       setSystemMessageError(
         error instanceof Error
           ? error.message
@@ -478,13 +463,11 @@ export function RagSettings() {
 
     if (existingItem) {
       // Show warning that item is already in cart
-      console.log(`${feature.name} is already in cart`);
       // You can add toast notification here
       return;
     }
 
     addItem(feature, 1);
-    console.log(`Added ${feature.name} to cart`);
   }; // Group and sort features by category and online/offline status
   const getGroupedFeatures = () => {
     const includedFeatures = getIncludedFeatures();

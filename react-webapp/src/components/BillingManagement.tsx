@@ -348,12 +348,21 @@ export function BillingManagement({
                 >
                   <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1">
                     <div className="p-2 rounded-lg bg-white dark:bg-gray-600 flex-shrink-0">
-                      <CreditCard className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600 dark:text-gray-400" />
+                      {method.type === "internet_banking" ? (
+                        <div className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600 dark:text-blue-400">
+                          🏦
+                        </div>
+                      ) : (
+                        <CreditCard className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600 dark:text-gray-400" />
+                      )}
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-col sm:flex-row sm:items-center gap-2">
                         <span className="font-medium text-gray-900 dark:text-gray-100 text-sm sm:text-base">
-                          {method.brand} •••• {method.last_four_digits}
+                          {method.type === "internet_banking"
+                            ? method.bank_name ||
+                              `${method.brand} Mobile Banking`
+                            : `${method.brand} •••• ${method.last_four_digits}`}
                         </span>
                         {method.is_default && (
                           <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-300 w-fit">
@@ -362,11 +371,15 @@ export function BillingManagement({
                           </span>
                         )}
                       </div>
-                      <div className="text-xs sm:text-sm text-gray-600 dark:text-gray-400">
-                        {t("billing.expires")}{" "}
-                        {method.expiry_month.toString().padStart(2, "0")}/
-                        {method.expiry_year}
-                      </div>
+                      {method.type !== "internet_banking" &&
+                        method.expiry_month &&
+                        method.expiry_year && (
+                          <div className="text-xs sm:text-sm text-gray-600 dark:text-gray-400">
+                            {t("billing.expires")}{" "}
+                            {method.expiry_month.toString().padStart(2, "0")}/
+                            {method.expiry_year}
+                          </div>
+                        )}
                     </div>
                   </div>
 

@@ -41,6 +41,7 @@ import { OmisePaymentService } from "../services/OmisePaymentService";
 import { OrderService } from "../services/orderService";
 import BillingManagement from "../components/BillingManagement";
 import { AlertModal } from "../components/Modal";
+import { PaymentMethodSelection } from "../components/PaymentMethodSelection";
 import { cn } from "../utils/cn";
 import { supabase } from "../lib/supabase";
 
@@ -115,23 +116,17 @@ const BillingSettingsService = {
 
       if (error) {
         // Handle various database errors
-        console.warn(
-          "Database error fetching billing settings, using defaults:",
-          error
-        );
         return this.getDefaultBillingSettings(userId);
       }
 
       // If no data found, return default settings
       if (!data || data.length === 0) {
-        console.log("No billing settings found for user, using defaults");
         return this.getDefaultBillingSettings(userId);
       }
 
       // Return the first (and should be only) record
       return data[0];
     } catch (error) {
-      console.error("Error fetching billing settings:", error);
       // Return default settings if database error
       return this.getDefaultBillingSettings(userId);
     }
@@ -156,20 +151,14 @@ const BillingSettingsService = {
           error.message?.includes("406") ||
           error.message?.includes("Not Acceptable")
         ) {
-          console.warn(
-            "Billing settings table not found or not accessible, returning mock state. Please run the billing schema migration.",
-            error
-          );
           return enabled;
         }
         // For other errors, still return the desired state but log the error
-        console.error("Database error, returning mock state:", error);
         return enabled;
       }
 
       return data.auto_renewal_enabled;
     } catch (error) {
-      console.error("Error toggling auto-renewal:", error);
       // Return the desired state if database error
       return enabled;
     }
@@ -234,6 +223,12 @@ export function Users() {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(5); // Number of items to show per page
 
+  // Payment method selection states
+  const [showRenewalPayment, setShowRenewalPayment] = useState(false);
+  const [showUpgradePayment, setShowUpgradePayment] = useState(false);
+  const [pendingRenewalData, setPendingRenewalData] = useState<any>(null);
+  const [pendingUpgradeData, setPendingUpgradeData] = useState<any>(null);
+
   useEffect(() => {
     if (user) {
       setUserProfile({
@@ -249,8 +244,196 @@ export function Users() {
       loadBillingSettings(user.id);
       // Load available plans
       loadPlans();
+
+      // Handle payment returns from internet banking
+      handlePaymentReturns();
     }
   }, [user]);
+
+  // Shared function to handle subscription creation and token renewal for internet banking payments
+  const completeInternetBankingSubscription = async (paymentData: {
+    userId: string;
+    amount: number;
+    currency: string;
+    description: string;
+    chargeId?: string;
+    orderId?: string;
+    subscriptionContext?: {
+      planName?: string;
+      planType?: string;
+      token?: any;
+    };
+  }) => {
+    if (!user?.id || !paymentData.subscriptionContext) return;
+
+    try {
+      // Create subscription record
+      const newExpiryDate = new Date();
+      newExpiryDate.setMonth(newExpiryDate.getMonth() + 1); // Add 1 month
+
+      const subscriptionRecord = await SubscriptionService.createSubscription({
+        user_id: user.id,
+        plan_name: paymentData.subscriptionContext.planName || "Basic Plan",
+        plan_type: paymentData.subscriptionContext.planType as
+          | "basic"
+          | "standard"
+          | "enterprise",
+        status: "active",
+        amount: paymentData.amount,
+        currency: paymentData.currency,
+        billing_cycle: "monthly",
+        started_at: new Date().toISOString(),
+        expires_at: newExpiryDate.toISOString(),
+        cancelled_at: null,
+        payment_method: "internet_banking",
+        transaction_id: paymentData.chargeId || paymentData.orderId || null,
+      });
+
+      if (subscriptionRecord) {
+        // Renew the token if token context is provided
+        if (paymentData.subscriptionContext.token) {
+          await TokenGenerationService.renewToken(
+            user.id,
+            paymentData.subscriptionContext.token
+          );
+        }
+
+        // Refresh the data
+        await loadSubscriptionData(user.id);
+
+        showAlertModal(
+          "Payment Successful",
+          `Subscription renewed successfully! Paid ${PricingService.formatCurrency(
+            paymentData.amount,
+            paymentData.currency
+          )}`,
+          "success"
+        );
+      } else {
+        showAlertModal(
+          "Subscription Creation Failed",
+          "Payment was successful but subscription record creation failed.",
+          "error"
+        );
+      }
+    } catch (error) {
+      showAlertModal(
+        "Subscription Processing Failed",
+        "Payment was successful but subscription processing failed. Please contact support.",
+        "error"
+      );
+    }
+  };
+
+  const handlePaymentReturns = async () => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const paymentStatus = urlParams.get("payment");
+
+    if (paymentStatus === "success") {
+      // Handle successful payment return
+      const pendingRenewal = localStorage.getItem("pendingRenewal");
+      const pendingUpgrade = localStorage.getItem("pendingUpgrade");
+      const pendingPayment = localStorage.getItem(
+        "pendingInternetBankingPayment"
+      );
+
+      if (pendingRenewal) {
+        const renewalData = JSON.parse(pendingRenewal);
+        localStorage.removeItem("pendingRenewal");
+        setPendingRenewalData(renewalData);
+        // Complete the renewal
+        completeRenewal({
+          chargeId: renewalData.chargeId,
+          orderId: renewalData.orderId,
+        });
+      } else if (pendingUpgrade) {
+        const upgradeData = JSON.parse(pendingUpgrade);
+        localStorage.removeItem("pendingUpgrade");
+        setPendingUpgradeData(upgradeData);
+        // Complete the upgrade
+        completeUpgrade({
+          chargeId: upgradeData.chargeId,
+          orderId: upgradeData.orderId,
+        });
+      } else if (pendingPayment) {
+        // Handle general internet banking payment return
+        const paymentData = JSON.parse(pendingPayment);
+        localStorage.removeItem("pendingInternetBankingPayment");
+
+        if (
+          paymentData.isSubscriptionPayment &&
+          paymentData.subscriptionContext
+        ) {
+          // Handle subscription payments (renewal/upgrade via internet banking)
+          await completeInternetBankingSubscription(paymentData);
+        } else {
+          // Handle regular payment orders (add-ons, etc.)
+          if (paymentData.orderId) {
+            try {
+              const { error } = await supabase
+                .from("payment_orders")
+                .update({
+                  status: "completed",
+                  completed_at: new Date().toISOString(),
+                })
+                .eq("id", paymentData.orderId);
+
+              if (error) {
+              } else {
+                // Refresh subscription data to reflect the new payment
+                await loadSubscriptionData(user?.id || "");
+
+                showAlertModal(
+                  "Payment Successful",
+                  "Your internet banking payment has been completed successfully!",
+                  "success"
+                );
+              }
+            } catch (error) {
+              showAlertModal(
+                "Payment Status Unknown",
+                "We couldn't confirm your payment status. Please check your account or contact support.",
+                "error"
+              );
+            }
+          }
+        }
+      }
+
+      // Clean up URL
+      window.history.replaceState({}, document.title, window.location.pathname);
+    } else if (paymentStatus === "failed") {
+      showAlertModal(
+        "Payment Failed",
+        "Internet banking payment was cancelled or failed. Please try again.",
+        "error"
+      );
+
+      // Clean up any stored pending data and update orders to failed
+      const pendingPayment = localStorage.getItem(
+        "pendingInternetBankingPayment"
+      );
+      if (pendingPayment) {
+        const paymentData = JSON.parse(pendingPayment);
+        // Only update payment orders for non-subscription payments
+        if (!paymentData.isSubscriptionPayment && paymentData.orderId) {
+          try {
+            await supabase
+              .from("payment_orders")
+              .update({ status: "failed" })
+              .eq("id", paymentData.orderId);
+          } catch (error) {}
+        }
+      }
+
+      localStorage.removeItem("pendingRenewal");
+      localStorage.removeItem("pendingUpgrade");
+      localStorage.removeItem("pendingInternetBankingPayment");
+
+      // Clean up URL
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  };
 
   const loadSubscriptionData = async (userId: string) => {
     setLoadingSubscriptions(true);
@@ -280,7 +463,6 @@ export function Users() {
         loadRenewalPricing(token, [...paymentOrders, ...generalOrders]);
       }
     } catch (error) {
-      console.error("Error loading subscription data:", error);
     } finally {
       setLoadingSubscriptions(false);
     }
@@ -295,7 +477,6 @@ export function Users() {
       );
       setRenewalPricing(pricing);
     } catch (error) {
-      console.error("Error loading renewal pricing:", error);
     } finally {
       setLoadingPricing(false);
     }
@@ -307,7 +488,6 @@ export function Users() {
       const settings = await BillingSettingsService.getBillingSettings(userId);
       setBillingSettings(settings);
     } catch (error) {
-      console.error("Error loading billing settings:", error);
     } finally {
       setLoadingBillingSettings(false);
     }
@@ -319,7 +499,6 @@ export function Users() {
       const plans = await PricingService.getPlans();
       setAvailablePlans(plans);
     } catch (error) {
-      console.error("Error loading plans:", error);
     } finally {
       setLoadingPlans(false);
     }
@@ -352,7 +531,6 @@ export function Users() {
             }
       );
     } catch (error) {
-      console.error("Error toggling auto-renewal:", error);
     } finally {
       setLoadingBillingSettings(false);
     }
@@ -361,91 +539,58 @@ export function Users() {
   const handleRenewToken = async () => {
     if (!user?.id || !token) return;
 
+    // Use the current renewal pricing from state
+    if (!renewalPricing) {
+      showAlertModal(
+        "Pricing Error",
+        "Unable to calculate renewal pricing. Please refresh the page.",
+        "error"
+      );
+      return;
+    }
+
+    // Store renewal data and show payment modal
+    setPendingRenewalData({
+      userId: user.id,
+      amount: renewalPricing.totalPrice,
+      currency: renewalPricing.currency,
+      description: `Token renewal for ${token.package} plan with add-ons`,
+      token: token,
+    });
+    setShowRenewalPayment(true);
+  };
+
+  const handleRenewalPaymentComplete = async (result: {
+    success: boolean;
+    chargeId?: string;
+    orderId?: string;
+    redirectUrl?: string;
+    error?: string;
+  }) => {
+    setShowRenewalPayment(false);
+
+    if (!pendingRenewalData) return;
+
     setProcessingRenewal(true);
     try {
-      // Use the current renewal pricing from state
-      if (!renewalPricing) {
-        showAlertModal(
-          "Pricing Error",
-          "Unable to calculate renewal pricing. Please refresh the page.",
-          "error"
-        );
-        return;
-      }
-
-      // Get user's payment methods
-      const paymentMethods = await OmisePaymentService.getUserPaymentMethods(
-        user.id
-      );
-
-      if (paymentMethods.length === 0) {
-        showAlertModal(
-          "Payment Method Required",
-          "Please add a payment method first by going to Cart and setting up payment.",
-          "error"
-        );
-        return;
-      }
-
-      // Use the first (default) payment method
-      const defaultPaymentMethod =
-        paymentMethods.find((pm) => pm.is_default) || paymentMethods[0];
-
-      // Process renewal payment
-      const result = await OmisePaymentService.processPayment(
-        user.id,
-        renewalPricing.totalPrice,
-        renewalPricing.currency,
-        `Token renewal for ${token.package} plan with add-ons`,
-        defaultPaymentMethod.id
-      );
-
       if (result.success) {
-        // Create subscription record for the renewal
-        const newExpiryDate = new Date();
-        newExpiryDate.setMonth(newExpiryDate.getMonth() + 1); // Add 1 month
-
-        const subscriptionRecord = await SubscriptionService.createSubscription(
-          {
-            user_id: user.id,
-            plan_name: `${
-              token.package.charAt(0).toUpperCase() + token.package.slice(1)
-            } Plan`,
-            plan_type: token.package as "basic" | "standard" | "enterprise",
-            status: "active",
-            amount: renewalPricing.totalPrice,
-            currency: renewalPricing.currency,
-            billing_cycle: "monthly",
-            started_at: new Date().toISOString(),
-            expires_at: newExpiryDate.toISOString(),
-            cancelled_at: null,
-            payment_method: defaultPaymentMethod.brand || "credit card",
-            transaction_id: result.chargeId || result.orderId || null,
-          }
-        );
-
-        if (subscriptionRecord) {
-          // Renew the token using the new service
-          await TokenGenerationService.renewToken(user.id, token);
-
-          showAlertModal(
-            "Renewal Successful",
-            `Token renewed successfully! Paid ${PricingService.formatCurrency(
-              renewalPricing.totalPrice,
-              renewalPricing.currency
-            )}`,
-            "success"
+        // Handle redirect for internet banking
+        if (result.redirectUrl) {
+          // Save payment status for return handling
+          localStorage.setItem(
+            "pendingRenewal",
+            JSON.stringify({
+              ...pendingRenewalData,
+              chargeId: result.chargeId,
+              orderId: result.orderId,
+            })
           );
 
-          // Refresh the data
-          await loadSubscriptionData(user.id);
-        } else {
-          showAlertModal(
-            "Subscription Creation Failed",
-            "Payment was successful but subscription record creation failed.",
-            "error"
-          );
+          window.location.href = result.redirectUrl;
+          return;
         }
+
+        await completeRenewal(result);
       } else {
         showAlertModal(
           "Payment Failed",
@@ -454,7 +599,6 @@ export function Users() {
         );
       }
     } catch (error) {
-      console.error("Renewal error:", error);
       showAlertModal(
         "Renewal Failed",
         "Renewal failed. Please try again.",
@@ -462,12 +606,70 @@ export function Users() {
       );
     } finally {
       setProcessingRenewal(false);
+      setPendingRenewalData(null);
+    }
+  };
+
+  const completeRenewal = async (paymentResult: {
+    chargeId?: string;
+    orderId?: string;
+  }) => {
+    if (!pendingRenewalData || !user?.id) return;
+
+    // Create subscription record for the renewal
+    const newExpiryDate = new Date();
+    newExpiryDate.setMonth(newExpiryDate.getMonth() + 1); // Add 1 month
+
+    const subscriptionRecord = await SubscriptionService.createSubscription({
+      user_id: user.id,
+      plan_name: `${
+        pendingRenewalData.token.package.charAt(0).toUpperCase() +
+        pendingRenewalData.token.package.slice(1)
+      } Plan`,
+      plan_type: pendingRenewalData.token.package as
+        | "basic"
+        | "standard"
+        | "enterprise",
+      status: "active",
+      amount: pendingRenewalData.amount,
+      currency: pendingRenewalData.currency,
+      billing_cycle: "monthly",
+      started_at: new Date().toISOString(),
+      expires_at: newExpiryDate.toISOString(),
+      cancelled_at: null,
+      payment_method: "internet_banking", // Will be updated based on actual payment method
+      transaction_id: paymentResult.chargeId || paymentResult.orderId || null,
+    });
+
+    if (subscriptionRecord) {
+      // Renew the token using the new service
+      await TokenGenerationService.renewToken(
+        user.id,
+        pendingRenewalData.token
+      );
+
+      showAlertModal(
+        "Renewal Successful",
+        `Token renewed successfully! Paid ${PricingService.formatCurrency(
+          pendingRenewalData.amount,
+          pendingRenewalData.currency
+        )}`,
+        "success"
+      );
+
+      // Refresh the data
+      await loadSubscriptionData(user.id);
+    } else {
+      showAlertModal(
+        "Subscription Creation Failed",
+        "Payment was successful but subscription record creation failed.",
+        "error"
+      );
     }
   };
 
   const handleSaveProfile = async () => {
     // Here you would typically call an API to update the user profile
-    console.log("Saving profile:", userProfile);
     setIsEditing(false);
     // You can add actual API call here when backend is ready
   };
@@ -497,17 +699,7 @@ export function Users() {
   };
 
   const calculateUpgradePrice = async (targetPlan: string) => {
-    console.log("calculateUpgradePrice called with:", targetPlan);
-    console.log("Current token:", token);
-    console.log("Renewal pricing:", renewalPricing);
-    console.log("Billing settings:", billingSettings);
-
     if (!token || !renewalPricing || !token.expiredAt) {
-      console.log("Missing required data for upgrade calculation:", {
-        token: !!token,
-        renewalPricing: !!renewalPricing,
-        expiredAt: token?.expiredAt,
-      });
       return null;
     }
 
@@ -528,16 +720,10 @@ export function Users() {
         addons: remainingAddons, // Only add-ons that won't be included in base plan
       };
 
-      console.log("Getting target pricing for mock token:", mockTargetToken);
-      console.log("Target plan features:", targetFeatureKeys);
-      console.log("Current add-ons:", token.addons || []);
-      console.log("Remaining add-ons after upgrade:", remainingAddons);
-
       const targetPricing = await PricingService.calculateRenewalPrice(
         mockTargetToken,
         []
       );
-      console.log("Target pricing result:", targetPricing);
 
       // Calculate prorated amount based on remaining days
       const now = new Date();
@@ -547,13 +733,6 @@ export function Users() {
         0,
         Math.ceil((expiredAt.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
       );
-
-      console.log("Date calculations:", {
-        now: now.toISOString(),
-        expiredAt: expiredAt.toISOString(),
-        totalDays,
-        remainingDays,
-      });
 
       // Calculate what user has already paid (prorated)
       const usedDays = totalDays - remainingDays;
@@ -576,18 +755,6 @@ export function Users() {
         targetPricing.totalPrice - renewalPricing.totalPrice
       );
 
-      console.log("Detailed pricing breakdown:", {
-        currentPlan: token.package,
-        targetPlan: targetPlan,
-        currentTotalPrice: renewalPricing.totalPrice,
-        targetTotalPrice: targetPricing.totalPrice,
-        immediateUpgradeDifference: immediateUpgradePrice,
-        remainingDays: remainingDays,
-        totalDays: totalDays,
-        proratedUpgradePrice: Math.round(upgradePrice),
-        currency: targetPricing.currency,
-      });
-
       const result = {
         upgradePrice: Math.round(upgradePrice),
         immediateUpgradePrice: Math.round(immediateUpgradePrice), // Add this for testing
@@ -596,10 +763,8 @@ export function Users() {
         currency: targetPricing.currency,
       };
 
-      console.log("Final upgrade calculation result:", result);
       return result;
     } catch (error) {
-      console.error("Error calculating upgrade price:", error);
       return null;
     }
   };
@@ -618,7 +783,6 @@ export function Users() {
       const upgradeDetails = await calculateUpgradePrice(targetPlan);
       setPendingUpgradeDetails(upgradeDetails);
     } catch (error) {
-      console.error("Error calculating upgrade details for display:", error);
       setPendingUpgradeDetails(null);
     }
 
@@ -627,33 +791,79 @@ export function Users() {
 
   const confirmUpgrade = async () => {
     if (!selectedUpgradePlan || !user?.id || !token) {
-      console.log("Missing required data for upgrade:", {
-        selectedUpgradePlan,
-        userId: user?.id,
-        token: !!token,
-      });
       return;
     }
 
-    console.log("Starting upgrade confirmation for plan:", selectedUpgradePlan);
-    setProcessingUpgrade(true);
     try {
-      console.log("Calculating upgrade price...");
       const upgradeDetails = await calculateUpgradePrice(selectedUpgradePlan);
-      console.log("Upgrade details:", upgradeDetails);
 
       if (!upgradeDetails) {
-        console.log("Failed to calculate upgrade details");
         showAlertModal("Error", "Unable to calculate upgrade pricing", "error");
         return;
       }
 
-      // For now, just create a new token without payment processing
-      // In a real implementation, you would process payment first
-      console.log("Proceeding with upgrade process...");
-      await processUpgrade(selectedUpgradePlan);
+      // Store upgrade data and show payment modal
+      setPendingUpgradeData({
+        userId: user.id,
+        amount: upgradeDetails.upgradePrice,
+        currency: upgradeDetails.currency,
+        description: `Plan upgrade to ${selectedUpgradePlan}`,
+        targetPlan: selectedUpgradePlan,
+        upgradeDetails: upgradeDetails,
+        token: token,
+      });
+      setShowUpgradePayment(true);
+      setUpgradeConfirmation(false);
     } catch (error) {
-      console.error("Upgrade error:", error);
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error occurred";
+      showAlertModal(
+        "Upgrade Failed",
+        `Plan upgrade failed: ${errorMessage}. Please check the console for details.`,
+        "error"
+      );
+    }
+  };
+
+  const handleUpgradePaymentComplete = async (result: {
+    success: boolean;
+    chargeId?: string;
+    orderId?: string;
+    redirectUrl?: string;
+    error?: string;
+  }) => {
+    setShowUpgradePayment(false);
+
+    if (!pendingUpgradeData) return;
+
+    setProcessingUpgrade(true);
+    try {
+      if (result.success) {
+        // Handle redirect for internet banking
+        if (result.redirectUrl) {
+          // Save payment status for return handling
+          localStorage.setItem(
+            "pendingUpgrade",
+            JSON.stringify({
+              ...pendingUpgradeData,
+              chargeId: result.chargeId,
+              orderId: result.orderId,
+            })
+          );
+
+          window.location.href = result.redirectUrl;
+          return;
+        }
+
+        await completeUpgrade(result);
+      } else {
+        showAlertModal(
+          "Payment Failed",
+          `Payment failed: ${result.error}`,
+          "error"
+        );
+      }
+    } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : "Unknown error occurred";
       showAlertModal(
@@ -667,36 +877,93 @@ export function Users() {
       setShowUpgradeModal(false);
       setSelectedUpgradePlan(null);
       setPendingUpgradeDetails(null);
+      setPendingUpgradeData(null);
     }
+  };
+
+  const handleUpgradeWithOmiseModal = async (targetPlan: string) => {
+    if (!user?.id || !token) return;
+
+    try {
+      const upgradeDetails = await calculateUpgradePrice(targetPlan);
+
+      if (!upgradeDetails) {
+        showAlertModal("Error", "Unable to calculate upgrade pricing", "error");
+        return;
+      }
+
+      setProcessingUpgrade(true);
+
+      // Create items array for upgrade
+      const upgradeItems = [
+        {
+          id: `upgrade_${targetPlan}`,
+          type: "plan_upgrade",
+          name: `Upgrade to ${targetPlan} Plan`,
+          description: `Plan upgrade from ${token.package} to ${targetPlan}`,
+          price: upgradeDetails.upgradePrice,
+          quantity: 1,
+          period: "month",
+        },
+      ];
+
+      const result = await OmisePaymentService.processInternetBankingWithModal(
+        user.id,
+        upgradeDetails.upgradePrice,
+        upgradeDetails.currency,
+        `Plan upgrade to ${targetPlan}`,
+        upgradeItems
+      );
+
+      if (result.success) {
+        await processUpgrade(targetPlan, result.chargeId);
+      } else {
+        showAlertModal(
+          "Payment Failed",
+          `Payment failed: ${result.error}`,
+          "error"
+        );
+      }
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error occurred";
+      showAlertModal(
+        "Upgrade Failed",
+        `Plan upgrade failed: ${errorMessage}. Please check the console for details.`,
+        "error"
+      );
+    } finally {
+      setProcessingUpgrade(false);
+      setShowUpgradeModal(false);
+    }
+  };
+
+  const completeUpgrade = async (paymentResult: {
+    chargeId?: string;
+    orderId?: string;
+  }) => {
+    if (!pendingUpgradeData || !user?.id) return;
+
+    await processUpgrade(pendingUpgradeData.targetPlan, paymentResult.chargeId);
   };
 
   const processUpgrade = async (targetPlan: string, chargeId?: string) => {
     if (!user?.id || !token) return;
 
     try {
-      console.log("Starting upgrade process for plan:", targetPlan);
-      console.log("Current user:", user.id);
-      console.log("Current token:", token);
-
       // 1. Deactivate current token
-      console.log("Deactivating current token...");
       await TokenService.deactivateToken(user.id);
-      console.log("Token deactivated successfully");
 
       // 2. Create new token with target plan using sophisticated composition
       const billingCycle =
         billingSettings?.billing_cycle === "yearly" ? "yearly" : "monthly";
       const newTokenData = composeToken(targetPlan, billingCycle);
 
-      console.log("Creating new token with sophisticated data:", newTokenData);
       const newToken = await TokenService.createToken(user.id, newTokenData);
-      console.log("New token created:", newToken);
 
       // 3. Create subscription history record
       const upgradeDetails = await calculateUpgradePrice(targetPlan);
       if (upgradeDetails) {
-        console.log("Creating subscription record...");
-
         // Map plan name to plan type enum
         const planTypeMapping: Record<
           string,
@@ -729,13 +996,10 @@ export function Users() {
           cancelled_at: null,
           payment_method: "credit_card",
         });
-        console.log("Subscription record created");
       }
 
       // 4. Refresh token and user data
-      console.log("Refreshing token...");
       await refreshToken();
-      console.log("Token refreshed");
 
       const planName =
         availablePlans.find((p) => p.key === targetPlan)?.name || targetPlan;
@@ -745,7 +1009,6 @@ export function Users() {
         "success"
       );
     } catch (error) {
-      console.error("Upgrade processing error:", error);
       // Show more detailed error information
       const errorMessage =
         error instanceof Error ? error.message : "Unknown error occurred";
@@ -953,13 +1216,6 @@ export function Users() {
         addon.feature_key || addon.key || addon.name
       );
     });
-
-    console.log("Base features in new plan:", baseFeatureKeys);
-    console.log("Current add-ons:", token?.addons || []);
-    console.log(
-      "Filtered add-ons (after removing included features):",
-      filteredAddons
-    );
 
     return {
       package: cleanPkg,
@@ -2207,19 +2463,20 @@ Generated on: ${new Date().toLocaleString()}
               )}
 
               {/* Plan Actions */}
-              <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
                 <button
                   onClick={handleStartUpgrade}
                   disabled={
                     loadingPlans || getAvailableUpgradePlans().length === 0
                   }
-                  className="flex-1 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-colors text-sm"
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-colors text-sm"
                 >
                   {loadingPlans ? t("common.loading") : t("users.upgradePlan")}
                 </button>
+
                 <button
                   onClick={() => setShowBillingManagement(true)}
-                  className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg font-medium transition-colors text-sm"
+                  className="px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg font-medium transition-colors text-sm"
                 >
                   {t("users.manageBilling")}
                 </button>
@@ -2229,7 +2486,7 @@ Generated on: ${new Date().toLocaleString()}
                   <button
                     onClick={handleRenewToken}
                     disabled={processingRenewal}
-                    className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-colors text-sm flex items-center justify-center gap-2"
+                    className="sm:col-span-2 lg:col-span-1 px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-colors text-sm flex items-center justify-center gap-2"
                   >
                     {processingRenewal ? (
                       <>
@@ -2239,7 +2496,7 @@ Generated on: ${new Date().toLocaleString()}
                     ) : (
                       <>
                         <RefreshCw className="w-4 h-4" />
-                        Renew Now (
+                        Renew Subscription (
                         {formatCurrency(
                           renewalPricing.totalPrice,
                           renewalPricing.currency
@@ -2312,10 +2569,9 @@ Generated on: ${new Date().toLocaleString()}
                 ) : (
                   <div className="space-y-3">
                     {getAvailableUpgradePlans().map((plan) => (
-                      <button
+                      <div
                         key={plan.id}
-                        onClick={() => handleUpgradePlan(plan.key)}
-                        className="w-full p-4 border border-gray-200 dark:border-gray-600 rounded-lg hover:border-indigo-300 dark:hover:border-indigo-500 transition-colors text-left"
+                        className="w-full p-4 border border-gray-200 dark:border-gray-600 rounded-lg transition-colors"
                       >
                         <div className="flex items-center justify-between">
                           <div className="flex-1">
@@ -2355,7 +2611,7 @@ Generated on: ${new Date().toLocaleString()}
                           </div>
                           <ArrowRight className="w-5 h-5 text-gray-400" />
                         </div>
-                      </button>
+                      </div>
                     ))}
                   </div>
                 )}
@@ -2552,6 +2808,49 @@ Generated on: ${new Date().toLocaleString()}
             />
           </div>
         </div>
+      )}
+
+      {/* Payment Method Selection for Renewal */}
+      {showRenewalPayment && pendingRenewalData && (
+        <PaymentMethodSelection
+          isOpen={showRenewalPayment}
+          onClose={() => setShowRenewalPayment(false)}
+          onPaymentComplete={handleRenewalPaymentComplete}
+          userId={pendingRenewalData.userId}
+          amount={pendingRenewalData.amount}
+          currency={pendingRenewalData.currency}
+          description={pendingRenewalData.description}
+          title="Renew Subscription"
+          isSubscriptionPayment={true}
+          subscriptionContext={{
+            planName: `${
+              pendingRenewalData.token.package.charAt(0).toUpperCase() +
+              pendingRenewalData.token.package.slice(1)
+            } Plan`,
+            planType: pendingRenewalData.token.package,
+            token: pendingRenewalData.token,
+          }}
+        />
+      )}
+
+      {/* Payment Method Selection for Upgrade */}
+      {showUpgradePayment && pendingUpgradeData && (
+        <PaymentMethodSelection
+          isOpen={showUpgradePayment}
+          onClose={() => setShowUpgradePayment(false)}
+          onPaymentComplete={handleUpgradePaymentComplete}
+          userId={pendingUpgradeData.userId}
+          amount={pendingUpgradeData.amount}
+          currency={pendingUpgradeData.currency}
+          description={pendingUpgradeData.description}
+          title="Upgrade Plan"
+          isSubscriptionPayment={true}
+          subscriptionContext={{
+            planName: pendingUpgradeData.targetPlan,
+            planType: pendingUpgradeData.targetPlan.toLowerCase(),
+            token: pendingUpgradeData.token,
+          }}
+        />
       )}
 
       {/* Alert Modal */}

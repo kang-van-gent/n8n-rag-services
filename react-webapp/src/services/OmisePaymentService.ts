@@ -13,6 +13,11 @@ declare global {
         data: CardData, 
         callback: (statusCode: number, response: TokenResponse) => void
       ): void;
+      createSource(
+        type: string,
+        data: any,
+        callback: (statusCode: number, response: any) => void
+      ): void;
       setPublicKey(key: string): void;
     };
   }
@@ -51,15 +56,18 @@ export interface TokenResponse {
 export interface OmisePaymentMethod {
   id: string;
   user_id: string;
-  omise_payment_method_id: string;
+  omise_payment_method_id?: string; // Optional for internet banking
+  type?: string; // 'credit_card' or 'internet_banking'
   brand: string;
   last_four_digits: string;
-  expiry_month: number;
-  expiry_year: number;
-  cardholder_name: string;
+  expiry_month?: number; // Optional for internet banking
+  expiry_year?: number; // Optional for internet banking
+  cardholder_name?: string; // Optional for internet banking
+  bank_code?: string; // For internet banking
+  bank_name?: string; // For internet banking
   is_default: boolean;
   created_at: string;
-  updated_at: string;
+  updated_at?: string;
 }
 
 export interface CreatePaymentMethodRequest {
@@ -134,16 +142,11 @@ export class OmisePaymentService {
     // Fallback for development - sometimes React doesn't pick up env vars immediately
     if (!publicKey && window.location.hostname === 'localhost') {
       publicKey = 'pkey_test_5nw5dlqajzq9gdwvuba'; // Your test key as fallback
-      console.warn('Using fallback Omise public key for development');
     }
     
     if (!publicKey) {
-      console.error('REACT_APP_OMISE_PUBLIC_KEY not found in environment variables');
-      console.log('Available env vars:', Object.keys(process.env).filter(key => key.startsWith('REACT_APP')));
       throw new Error('Omise public key is required');
     }
-    
-    console.log('Initializing Omise with public key:', publicKey.substring(0, 10) + '...');
     
     // Load Omise.js script if not already loaded
     if (!window.Omise) {
@@ -153,14 +156,12 @@ export class OmisePaymentService {
         if (publicKey) {
           window.Omise.setPublicKey(publicKey);
           this.isInitialized = true;
-          console.log('Omise.js loaded and initialized');
         }
       };
       document.head.appendChild(script);
     } else {
       window.Omise.setPublicKey(publicKey);
       this.isInitialized = true;
-      console.log('Omise.js initialized with existing library');
     }
   }
 
@@ -175,7 +176,6 @@ export class OmisePaymentService {
         .maybeSingle();
 
       if (fetchError) {
-        console.error('Error fetching billing profile:', fetchError);
         // Continue to create a new profile
       }
 
@@ -197,13 +197,11 @@ export class OmisePaymentService {
         .single();
 
       if (createError) {
-        console.error('Error creating billing profile:', createError);
         throw new Error('Failed to create billing profile');
       }
 
       return newProfile;
     } catch (error) {
-      console.error('Error in getOrCreateBillingProfile:', error);
       throw new Error('Failed to setup billing profile');
     }
   }
@@ -257,16 +255,8 @@ export class OmisePaymentService {
         postal_code: paymentData.postalCode || undefined,
       };
 
-      console.log('Sending card data to Omise:', {
-        ...cardData,
-        number: cardData.number.substring(0, 6) + '******' + cardData.number.slice(-4),
-        security_code: '***'
-      });
-
       // Create token with Omise.js
       window.Omise.createToken('card', cardData, async (statusCode: number, response: TokenResponse) => {
-        console.log('Omise response:', { statusCode, response });
-        
         if (statusCode !== 200) {
           // Try to extract a more specific error message
           let errorMessage = 'Failed to create payment token. Please check your card details.';
@@ -277,7 +267,6 @@ export class OmisePaymentService {
               errorMessage = `Omise error code: ${response.code}`;
             }
           }
-          console.error('Omise tokenization failed:', { statusCode, response });
           reject(new Error(errorMessage));
           return;
         }
@@ -290,9 +279,7 @@ export class OmisePaymentService {
             return;
           }
 
-          console.log('Creating billing profile for user:', userId);
           await this.getOrCreateBillingProfile(userId, user.user.email);
-          console.log('Billing profile ready');
 
           // Get card brand from number
           const cardNumber = paymentData.cardNumber.replace(/\s/g, '');
@@ -319,8 +306,6 @@ export class OmisePaymentService {
           }
 
           // Create Omise customer with the card token (for reusable cards)
-          console.log('Creating Omise customer with card token...');
-          
           try {
             const customerResponse = await fetch(`${process.env.REACT_APP_OMISE_PROXY_URL || 'http://localhost:3001'}/api/customers`, {
               method: 'POST',
@@ -342,8 +327,6 @@ export class OmisePaymentService {
             const customer = await customerResponse.json();
             const customerCard = customer.cards.data[0]; // Get the first (and only) card
             
-            console.log('Omise customer created:', { customerId: customer.id, cardId: customerCard.id });
-
             // Prepare payment method data for Supabase with customer ID (for charging)
             const paymentMethodData = {
               user_id: userId,
@@ -356,8 +339,6 @@ export class OmisePaymentService {
               is_default: shouldBeDefault,
             };
 
-            console.log('Inserting payment method into Supabase:', paymentMethodData);
-
             // Save payment method to Supabase
             const { data: newMethod, error } = await supabase
               .from('user_payment_methods')
@@ -366,26 +347,66 @@ export class OmisePaymentService {
               .single();
 
             if (error) {
-              console.error('Error saving payment method:', error);
-              console.error('Failed data:', paymentMethodData);
               reject(new Error('Failed to save payment method'));
               return;
             }
 
-            console.log('Successfully saved payment method:', newMethod);
             resolve(newMethod);
 
           } catch (customerError) {
-            console.error('Error creating customer:', customerError);
             reject(new Error('Failed to create customer and save payment method'));
             return;
           }
         } catch (error) {
-          console.error('Error processing payment method:', error);
           reject(new Error('Failed to process payment method'));
         }
       });
     });
+  }
+
+  // Create internet banking payment method (saves bank preference)
+  static async createInternetBankingMethod(
+    userId: string, 
+    bankCode: string, 
+    bankName: string, 
+    isDefault: boolean = false
+  ): Promise<OmisePaymentMethod> {
+    try {
+      // Create a payment method record for internet banking preference
+      // TEMPORARY: Using existing schema fields until database migration is run
+      const paymentMethodData = {
+        user_id: userId,
+        omise_payment_method_id: `internet_banking_${bankCode}_${Date.now()}`, // Unique identifier
+        brand: bankCode.toUpperCase(),
+        last_four_digits: 'BANK', // Identifier for internet banking
+        expiry_month: 0, // Use 0 to indicate internet banking
+        expiry_year: 0,
+        cardholder_name: bankName, // Store bank name in cardholder_name field temporarily
+        is_default: isDefault,
+      };
+
+      // If this is set as default, clear other defaults first
+      if (isDefault) {
+        await supabase
+          .from('user_payment_methods')
+          .update({ is_default: false })
+          .eq('user_id', userId);
+      }
+
+      const { data: newMethod, error } = await supabase
+        .from('user_payment_methods')
+        .insert([paymentMethodData])
+        .select()
+        .single();
+
+      if (error) {
+        throw new Error('Failed to save internet banking preference');
+      }
+
+      return newMethod;
+    } catch (error) {
+      throw new Error('Failed to create internet banking method');
+    }
   }
 
   // Get user's payment methods
@@ -398,13 +419,11 @@ export class OmisePaymentService {
         .order('created_at', { ascending: false });
 
       if (error) {
-        console.error('Error fetching payment methods:', error);
         return [];
       }
 
       return data || [];
     } catch (error) {
-      console.error('Error in getUserPaymentMethods:', error);
       return [];
     }
   }
@@ -419,11 +438,9 @@ export class OmisePaymentService {
         .eq('user_id', userId);
 
       if (error) {
-        console.error('Error deleting payment method:', error);
         throw new Error('Failed to delete payment method');
       }
     } catch (error) {
-      console.error('Error in deletePaymentMethod:', error);
       throw error;
     }
   }
@@ -445,11 +462,9 @@ export class OmisePaymentService {
         .eq('user_id', userId);
 
       if (error) {
-        console.error('Error setting default payment method:', error);
         throw new Error('Failed to set default payment method');
       }
     } catch (error) {
-      console.error('Error in setDefaultPaymentMethod:', error);
       throw error;
     }
   }
@@ -461,7 +476,7 @@ export class OmisePaymentService {
     currency: string,
     description: string,
     paymentMethodId: string
-  ): Promise<{ success: boolean; orderId?: string; chargeId?: string; error?: string }> {
+  ): Promise<{ success: boolean; orderId?: string; chargeId?: string; redirectUrl?: string; error?: string }> {
     try {
       // Get the payment method
       const { data: paymentMethod, error: pmError } = await supabase
@@ -475,7 +490,37 @@ export class OmisePaymentService {
         return { success: false, error: 'Payment method not found' };
       }
 
-      // Initialize Omise if needed
+      // Check if this is an internet banking method (saved bank preference)
+      const isInternetBanking = paymentMethod.expiry_month === 0 && paymentMethod.last_four_digits === 'BANK';
+      
+      if (isInternetBanking) {
+        // For saved internet banking methods, redirect to create a new internet banking payment
+        console.log('Processing saved internet banking method:', paymentMethod);
+        
+        // Extract bank code from the brand (stored as bank code)
+        const bankCode = paymentMethod.brand?.toLowerCase();
+        if (!bankCode) {
+          return { success: false, error: 'Invalid bank information' };
+        }
+
+        // Use the internet banking payment flow instead of trying to charge the fake token
+        const returnUri = `${window.location.origin}/users?payment=success`;
+        const failureUri = `${window.location.origin}/users?payment=failed`;
+
+        return await this.processInternetBankingPayment(
+          userId,
+          amount,
+          currency,
+          description,
+          bankCode,
+          returnUri,
+          failureUri,
+          undefined, // items
+          false // isSubscriptionPayment - will be determined by the calling context
+        );
+      }
+
+      // Initialize Omise if needed for credit card payments
       await this.initialize();
 
       if (!window.Omise) {
@@ -487,10 +532,11 @@ export class OmisePaymentService {
         .from('payment_orders')
         .insert({
           user_id: userId,
+          items: [{ type: 'credit_card', description: description || 'Cart purchase', amount: amount }],
           total_amount: amount,
           currency: currency,
-          payment_method: paymentMethod.brand || 'credit card',
-          items: { description: description || 'Cart purchase' },
+          description: description || 'Cart purchase',
+          payment_method: paymentMethod.brand || 'credit_card',
           status: 'pending',
         })
         .select()
@@ -619,20 +665,282 @@ export class OmisePaymentService {
     }
   }
 
+  /**
+   * Process internet banking payment with Omise
+   */
+  static async processInternetBankingPayment(
+    userId: string,
+    amount: number,
+    currency: string,
+    description: string,
+    bankCode: string,
+    returnUri: string,
+    failureUri: string,
+    items?: any[],
+    isSubscriptionPayment: boolean = false
+  ): Promise<{ success: boolean; orderId?: string; chargeId?: string; redirectUrl?: string; error?: string }> {
+    try {
+      // Initialize Omise if needed
+      await this.initialize();
+
+      let order = null;
+
+      // Only create payment order for non-subscription payments
+      if (!isSubscriptionPayment) {
+        // Create initial payment order record with pending status
+        // Ensure we always have a valid items array
+        const orderItems = items && Array.isArray(items) && items.length > 0 
+          ? items 
+          : [{ 
+              type: 'internet_banking', 
+              description: description || 'Cart purchase', 
+              amount: amount,
+              id: `ib_${Date.now()}`,
+              name: 'Internet Banking Payment',
+              quantity: 1
+            }];
+
+        // CRITICAL: Ensure items are JSON-serializable and never null
+        let safeItems;
+        try {
+          // Convert to JSON and back to ensure it's serializable
+          const itemsToInsert = orderItems || [{ 
+            type: 'internet_banking_fallback', 
+            description: description || 'Cart purchase', 
+            amount: amount,
+            id: `safe_${Date.now()}`,
+            name: 'Internet Banking Payment',
+            quantity: 1
+          }];
+          
+          // Test JSON serialization
+          const jsonTest = JSON.stringify(itemsToInsert);
+          safeItems = JSON.parse(jsonTest);
+          
+          console.log('DEBUG - JSON serialization test passed');
+          console.log('DEBUG - safeItems after serialization:', safeItems);
+          
+        } catch (error) {
+          console.error('JSON serialization error:', error);
+          safeItems = [{ 
+            type: 'json_error_fallback', 
+            description: 'Fallback due to serialization error', 
+            amount: amount,
+            id: `error_${Date.now()}`,
+            name: 'Payment',
+            quantity: 1
+          }];
+        }
+
+        console.log('DEBUG - About to insert payment order with:');
+        console.log('- user_id:', userId);
+        console.log('- items:', safeItems);
+        console.log('- items type:', typeof safeItems);
+        console.log('- items JSON:', JSON.stringify(safeItems));
+
+        const insertData = {
+          user_id: userId,
+          items: safeItems,
+          total_amount: amount,
+          currency: currency,
+          description: description || 'Cart purchase',
+          payment_method: `internet_banking_${bankCode}`,
+          status: 'pending',
+        };
+
+        console.log('DEBUG - Final insert data:', insertData);
+
+        const { data: orderData, error: orderError } = await supabase
+          .from('payment_orders')
+          .insert(insertData)
+          .select()
+          .single();
+
+        if (orderError) {
+          console.error('Error creating payment order:', orderError);
+          return { success: false, error: 'Failed to create payment order' };
+        }
+
+        order = orderData;
+      } else {
+        console.log('Skipping payment order creation for subscription payment');
+      }
+
+      // Create source for mobile banking - using correct Omise bank codes
+      const bankTypeMap: Record<string, string> = {
+        'bbl': 'mobile_banking_bbl',
+        'kbank': 'mobile_banking_kbank', 
+        'ktb': 'mobile_banking_ktb',
+        'scb': 'mobile_banking_scb',
+        'tmb': 'mobile_banking_scb', // TMB not listed, using SCB as fallback
+        'bay': 'mobile_banking_bay'
+      };
+
+      const omiseBankType = bankTypeMap[bankCode];
+      if (!omiseBankType) {
+        return { success: false, error: `Unsupported bank: ${bankCode}` };
+      }
+
+      const sourceData = {
+        type: omiseBankType,
+        amount: Math.round(amount * 100), // Convert to satang
+        currency: currency.toLowerCase(),
+      };
+
+      console.log('Creating Omise source for internet banking...', sourceData);
+
+      // Call proxy server to create source and charge
+      const proxyUrl = process.env.REACT_APP_OMISE_PROXY_URL || 'http://localhost:3001';
+      const response = await fetch(`${proxyUrl}/api/internet-banking-charge`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          source: sourceData,
+          amount: Math.round(amount * 100),
+          currency: currency.toLowerCase(),
+          description: description || 'Cart purchase',
+          return_uri: returnUri,
+          failure_uri: failureUri,
+          metadata: {
+            ...(order ? { order_id: order.id } : {}),
+            user_id: userId,
+            is_subscription_payment: isSubscriptionPayment,
+          },
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        // Update order status to failed only if order exists
+        if (order) {
+          await supabase
+            .from('payment_orders')
+            .update({ status: 'failed' })
+            .eq('id', order.id);
+        }
+
+        return {
+          success: false,
+          error: result.error || 'Failed to create internet banking charge',
+        };
+      }
+
+      // Update order with charge ID only if order exists
+      if (order) {
+        await supabase
+          .from('payment_orders')
+          .update({
+            status: 'processing', // Internet banking payments need user to complete on bank site
+            charge_id: result.charge?.id,
+          })
+          .eq('id', order.id);
+      }
+
+      return {
+        success: true,
+        orderId: order?.id,
+        chargeId: result.charge?.id,
+        redirectUrl: result.charge?.authorize_uri, // URL to redirect user to bank
+      };
+
+    } catch (error) {
+      console.error('Error processing internet banking payment:', error);
+      return { success: false, error: 'Internet banking payment processing failed' };
+    }
+  }
+
   // Convert to cart payment method format
   static convertToCartPaymentMethod(omiseMethod: OmisePaymentMethod): any {
-    return {
-      id: omiseMethod.id,
-      type: 'credit_card' as const,
-      displayName: `${omiseMethod.brand} ****${omiseMethod.last_four_digits}`,
-      details: {
-        cardNumber: omiseMethod.last_four_digits,
-        expiryDate: `${omiseMethod.expiry_month.toString().padStart(2, '0')}/${omiseMethod.expiry_year.toString().slice(-2)}`,
-        cardholderName: omiseMethod.cardholder_name,
-      },
-      isDefault: omiseMethod.is_default,
-      createdAt: omiseMethod.created_at,
-    };
+    // Detect internet banking methods (temporary logic for current schema)
+    const isInternetBanking = omiseMethod.expiry_month === 0 && omiseMethod.last_four_digits === 'BANK';
+    
+    if (isInternetBanking || omiseMethod.type === 'internet_banking') {
+      // Handle internet banking methods
+      return {
+        id: omiseMethod.id,
+        type: 'internet_banking' as const,
+        displayName: omiseMethod.cardholder_name || `${omiseMethod.brand} Mobile Banking`,
+        details: {
+          bankCode: omiseMethod.brand?.toLowerCase(),
+          bankName: omiseMethod.cardholder_name,
+        },
+        isDefault: omiseMethod.is_default,
+        createdAt: omiseMethod.created_at,
+        bank_code: omiseMethod.brand?.toLowerCase(),
+        bank_name: omiseMethod.cardholder_name,
+      };
+    } else {
+      // Handle credit card methods
+      return {
+        id: omiseMethod.id,
+        type: 'credit_card' as const,
+        displayName: `${omiseMethod.brand} ****${omiseMethod.last_four_digits}`,
+        details: {
+          cardNumber: omiseMethod.last_four_digits,
+          expiryDate: omiseMethod.expiry_month && omiseMethod.expiry_year 
+            ? `${omiseMethod.expiry_month.toString().padStart(2, '0')}/${omiseMethod.expiry_year.toString().slice(-2)}`
+            : '',
+          cardholderName: omiseMethod.cardholder_name || '',
+        },
+        isDefault: omiseMethod.is_default,
+        createdAt: omiseMethod.created_at,
+      };
+    }
+  }
+
+  // Internet Banking with Omise Source (Direct Bank Selection)
+  static async processInternetBankingWithModal(
+    userId: string,
+    amount: number,
+    currency: string,
+    description: string,
+    items?: any[]
+  ): Promise<{ success: boolean; orderId?: string; chargeId?: string; redirectUrl?: string; error?: string }> {
+    return new Promise(async (resolve) => {
+      try {
+        // Show a simple bank selection modal
+        const selectedBank = await this.showBankSelectionModal();
+        
+        if (!selectedBank) {
+          resolve({
+            success: false,
+            error: 'No bank selected',
+          });
+          return;
+        }
+
+        // Create internet banking source using our existing method
+        // (this method will create the payment order with proper items)
+        const result = await this.processInternetBankingPayment(
+          userId,
+          amount,
+          currency,
+          description,
+          selectedBank,
+          `${window.location.origin}/cart?payment=success`,
+          `${window.location.origin}/cart?payment=failed`,
+          items
+        );
+
+        resolve(result);
+      } catch (error) {
+        console.error('Error processing internet banking payment:', error);
+        resolve({
+          success: false,
+          error: error instanceof Error ? error.message : 'Payment processing failed',
+        });
+      }
+    });
+  }
+
+  // Show bank selection modal using React component
+  static async showBankSelectionModal(): Promise<string | null> {
+    // Dynamically import the service to avoid circular dependencies
+    const { BankModalService } = await import('./BankModalService');
+    return BankModalService.showBankSelection();
   }
 
   // Validate card data (static method for form validation)

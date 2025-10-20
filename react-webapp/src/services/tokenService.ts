@@ -37,7 +37,6 @@ export class TokenService {
 
       return data;
     } catch (error) {
-      console.error('Error fetching user token:', error);
       throw error;
     }
   }
@@ -50,7 +49,6 @@ export class TokenService {
       const token = await this.getUserToken(userId);
       return token !== null;
     } catch (error) {
-      console.error('Error checking active token:', error);
       return false;
     }
   }
@@ -88,7 +86,6 @@ export class TokenService {
       if (error) throw error;
       return data;
     } catch (error) {
-      console.error('Error creating token:', error);
       throw error;
     }
   }
@@ -106,7 +103,6 @@ export class TokenService {
 
       if (error) throw error;
     } catch (error) {
-      console.error('Error deactivating token:', error);
       throw error;
     }
   }
@@ -159,7 +155,6 @@ export class TokenService {
       if (error) throw error;
       return data;
     } catch (error) {
-      console.error('Error validating and activating token:', error);
       throw error;
     }
   }
@@ -183,7 +178,6 @@ export class TokenService {
       if (error) throw error;
       return data;
     } catch (error) {
-      console.error('Error updating system message:', error);
       throw error;
     }
   }
@@ -201,8 +195,6 @@ export class TokenService {
     }
   ): Promise<Token> {
     try {
-      console.log('Updating token for user:', userId, 'with updates:', updates);
-      
       const { data, error } = await supabase
         .from('tokens')
         .update(updates)
@@ -214,7 +206,6 @@ export class TokenService {
       if (error) throw error;
       return data;
     } catch (error) {
-      console.error('Error updating token:', error);
       throw error;
     }
   }
@@ -254,7 +245,6 @@ export class TokenService {
       // Update the token with merged addons
       return await this.updateTokenFeatures(userId, { addons: mergedAddons });
     } catch (error) {
-      console.error('Error adding addons to token:', error);
       throw error;
     }
   }

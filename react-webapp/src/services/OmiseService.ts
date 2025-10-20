@@ -10,6 +10,11 @@ declare global {
         data: CardData, 
         callback: (statusCode: number, response: TokenResponse) => void
       ): void;
+      createSource(
+        type: string,
+        data: any,
+        callback: (statusCode: number, response: any) => void
+      ): void;
       setPublicKey(key: string): void;
     };
   }
