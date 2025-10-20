@@ -19,6 +19,7 @@ import {
   Eye,
   ChevronDown,
   ChevronUp,
+  ArrowRight,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
@@ -29,6 +30,7 @@ import { useCart } from "../contexts/CartContext";
 import { TokenFeatureService } from "../services/TokenFeatureService";
 import { PricingService } from "../services/pricingService";
 import { TokenGenerationService } from "../services/tokenGenerationService";
+import { TokenService } from "../services/tokenService";
 import {
   SubscriptionService,
   SubscriptionHistory,
@@ -56,6 +58,33 @@ interface BillingSettings {
   };
   created_at?: string;
   updated_at?: string;
+}
+
+// Define unified purchase history interface
+interface PurchaseHistoryItem {
+  id: string;
+  type: "order" | "subscription";
+  date: string;
+  title: string;
+  orderNumber: string;
+  items: Array<{
+    name: string;
+    description?: string;
+    category?: string;
+    price: number;
+    quantity: number;
+  }>;
+  total: number;
+  currency: string;
+  status: string;
+  paymentMethod?: string;
+  // Order specific
+  orderId?: string;
+  // Subscription specific
+  planType?: string;
+  planName?: string;
+  features?: string[];
+  nextExpiry?: string;
 }
 
 // Self-contained billing service to avoid module resolution issues
@@ -151,7 +180,7 @@ export function Users() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { token, loading: tokenLoading } = useToken();
+  const { token, loading: tokenLoading, refreshToken } = useToken();
   const { items, itemCount } = useCart();
   const [isEditing, setIsEditing] = useState(false);
   const [userProfile, setUserProfile] = useState({
@@ -167,6 +196,9 @@ export function Users() {
     useState<SubscriptionSummary | null>(null);
   const [paymentOrders, setPaymentOrders] = useState<PaymentOrder[]>([]);
   const [generalOrders, setGeneralOrders] = useState<any[]>([]);
+  const [purchaseHistory, setPurchaseHistory] = useState<PurchaseHistoryItem[]>(
+    []
+  );
   const [loadingSubscriptions, setLoadingSubscriptions] = useState(false);
   const [showBillingManagement, setShowBillingManagement] = useState(false);
   const [processingRenewal, setProcessingRenewal] = useState(false);
@@ -188,6 +220,19 @@ export function Users() {
   const [billingSettings, setBillingSettings] =
     useState<BillingSettings | null>(null);
   const [loadingBillingSettings, setLoadingBillingSettings] = useState(false);
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const [selectedUpgradePlan, setSelectedUpgradePlan] = useState<string | null>(
+    null
+  );
+  const [processingUpgrade, setProcessingUpgrade] = useState(false);
+  const [upgradeConfirmation, setUpgradeConfirmation] = useState(false);
+  const [availablePlans, setAvailablePlans] = useState<any[]>([]);
+  const [loadingPlans, setLoadingPlans] = useState(false);
+  const [pendingUpgradeDetails, setPendingUpgradeDetails] = useState<any>(null);
+
+  // Pagination state for Purchase History
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(5); // Number of items to show per page
 
   useEffect(() => {
     if (user) {
@@ -202,6 +247,8 @@ export function Users() {
       loadSubscriptionData(user.id);
       // Load billing settings
       loadBillingSettings(user.id);
+      // Load available plans
+      loadPlans();
     }
   }, [user]);
 
@@ -218,9 +265,15 @@ export function Users() {
       setSubscriptionHistory(history);
       setSubscriptionSummary(summary);
       setPaymentOrders(paymentOrders);
-
-      // Store general orders in a new state (we'll add this)
       setGeneralOrders(generalOrders);
+
+      // Merge and sort purchase history
+      const mergedHistory = createUnifiedPurchaseHistory(
+        history,
+        paymentOrders,
+        generalOrders
+      );
+      setPurchaseHistory(mergedHistory);
 
       // Load pricing information after orders are loaded (combine both order types)
       if (token) {
@@ -257,6 +310,18 @@ export function Users() {
       console.error("Error loading billing settings:", error);
     } finally {
       setLoadingBillingSettings(false);
+    }
+  };
+
+  const loadPlans = async () => {
+    setLoadingPlans(true);
+    try {
+      const plans = await PricingService.getPlans();
+      setAvailablePlans(plans);
+    } catch (error) {
+      console.error("Error loading plans:", error);
+    } finally {
+      setLoadingPlans(false);
     }
   };
 
@@ -336,20 +401,51 @@ export function Users() {
       );
 
       if (result.success) {
-        // Renew the token using the new service
-        await TokenGenerationService.renewToken(user.id, token);
+        // Create subscription record for the renewal
+        const newExpiryDate = new Date();
+        newExpiryDate.setMonth(newExpiryDate.getMonth() + 1); // Add 1 month
 
-        showAlertModal(
-          "Renewal Successful",
-          `Token renewed successfully! Paid ${PricingService.formatCurrency(
-            renewalPricing.totalPrice,
-            renewalPricing.currency
-          )}`,
-          "success"
+        const subscriptionRecord = await SubscriptionService.createSubscription(
+          {
+            user_id: user.id,
+            plan_name: `${
+              token.package.charAt(0).toUpperCase() + token.package.slice(1)
+            } Plan`,
+            plan_type: token.package as "basic" | "standard" | "enterprise",
+            status: "active",
+            amount: renewalPricing.totalPrice,
+            currency: renewalPricing.currency,
+            billing_cycle: "monthly",
+            started_at: new Date().toISOString(),
+            expires_at: newExpiryDate.toISOString(),
+            cancelled_at: null,
+            payment_method: defaultPaymentMethod.brand || "credit card",
+            transaction_id: result.chargeId || result.orderId || null,
+          }
         );
 
-        // Refresh the data
-        await loadSubscriptionData(user.id);
+        if (subscriptionRecord) {
+          // Renew the token using the new service
+          await TokenGenerationService.renewToken(user.id, token);
+
+          showAlertModal(
+            "Renewal Successful",
+            `Token renewed successfully! Paid ${PricingService.formatCurrency(
+              renewalPricing.totalPrice,
+              renewalPricing.currency
+            )}`,
+            "success"
+          );
+
+          // Refresh the data
+          await loadSubscriptionData(user.id);
+        } else {
+          showAlertModal(
+            "Subscription Creation Failed",
+            "Payment was successful but subscription record creation failed.",
+            "error"
+          );
+        }
       } else {
         showAlertModal(
           "Payment Failed",
@@ -376,12 +472,551 @@ export function Users() {
     // You can add actual API call here when backend is ready
   };
 
+  const getAvailableUpgradePlans = () => {
+    if (!token?.package || availablePlans.length === 0) return [];
+
+    // Find current plan in database
+    const currentPlan = availablePlans.find(
+      (plan) =>
+        plan.key === token.package ||
+        plan.name.toLowerCase() === token.package.toLowerCase()
+    );
+
+    if (!currentPlan) return availablePlans; // If current plan not found, show all plans
+
+    // Convert price from string to number for comparison
+    const currentPlanPrice = parseFloat(currentPlan.price || "0");
+
+    // Return plans with higher price (higher tier)
+    return availablePlans
+      .filter((plan) => {
+        const planPrice = parseFloat(plan.price || "0");
+        return planPrice > currentPlanPrice && plan.is_active;
+      })
+      .sort((a, b) => parseFloat(a.price || "0") - parseFloat(b.price || "0"));
+  };
+
+  const calculateUpgradePrice = async (targetPlan: string) => {
+    console.log("calculateUpgradePrice called with:", targetPlan);
+    console.log("Current token:", token);
+    console.log("Renewal pricing:", renewalPricing);
+    console.log("Billing settings:", billingSettings);
+
+    if (!token || !renewalPricing || !token.expiredAt) {
+      console.log("Missing required data for upgrade calculation:", {
+        token: !!token,
+        renewalPricing: !!renewalPricing,
+        expiredAt: token?.expiredAt,
+      });
+      return null;
+    }
+
+    try {
+      // Calculate what add-ons would remain after upgrade (smart filtering)
+      const targetPlanFeatures =
+        PLAN_FEATURES[normalizePackage(targetPlan)] || PLAN_FEATURES["basic"];
+      const targetFeatureKeys = targetPlanFeatures.map((f) => f.feature_key);
+      const remainingAddons = (token.addons || []).filter((addon) => {
+        return !targetFeatureKeys.includes(
+          addon.feature_key || addon.key || addon.name
+        );
+      });
+
+      // Get pricing for target plan with only remaining add-ons
+      const mockTargetToken = {
+        package: targetPlan,
+        addons: remainingAddons, // Only add-ons that won't be included in base plan
+      };
+
+      console.log("Getting target pricing for mock token:", mockTargetToken);
+      console.log("Target plan features:", targetFeatureKeys);
+      console.log("Current add-ons:", token.addons || []);
+      console.log("Remaining add-ons after upgrade:", remainingAddons);
+
+      const targetPricing = await PricingService.calculateRenewalPrice(
+        mockTargetToken,
+        []
+      );
+      console.log("Target pricing result:", targetPricing);
+
+      // Calculate prorated amount based on remaining days
+      const now = new Date();
+      const expiredAt = new Date(token.expiredAt);
+      const totalDays = billingSettings?.billing_cycle === "yearly" ? 365 : 30;
+      const remainingDays = Math.max(
+        0,
+        Math.ceil((expiredAt.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+      );
+
+      console.log("Date calculations:", {
+        now: now.toISOString(),
+        expiredAt: expiredAt.toISOString(),
+        totalDays,
+        remainingDays,
+      });
+
+      // Calculate what user has already paid (prorated)
+      const usedDays = totalDays - remainingDays;
+      const alreadyPaidForRemainingPeriod =
+        (renewalPricing.totalPrice * remainingDays) / totalDays;
+
+      // Calculate target plan price for remaining period
+      const targetPriceForRemainingPeriod =
+        (targetPricing.totalPrice * remainingDays) / totalDays;
+
+      // Upgrade cost is the difference
+      const upgradePrice = Math.max(
+        0,
+        targetPriceForRemainingPeriod - alreadyPaidForRemainingPeriod
+      );
+
+      // For immediate upgrades (testing), calculate full price difference
+      const immediateUpgradePrice = Math.max(
+        0,
+        targetPricing.totalPrice - renewalPricing.totalPrice
+      );
+
+      console.log("Detailed pricing breakdown:", {
+        currentPlan: token.package,
+        targetPlan: targetPlan,
+        currentTotalPrice: renewalPricing.totalPrice,
+        targetTotalPrice: targetPricing.totalPrice,
+        immediateUpgradeDifference: immediateUpgradePrice,
+        remainingDays: remainingDays,
+        totalDays: totalDays,
+        proratedUpgradePrice: Math.round(upgradePrice),
+        currency: targetPricing.currency,
+      });
+
+      const result = {
+        upgradePrice: Math.round(upgradePrice),
+        immediateUpgradePrice: Math.round(immediateUpgradePrice), // Add this for testing
+        targetPricing,
+        remainingDays,
+        currency: targetPricing.currency,
+      };
+
+      console.log("Final upgrade calculation result:", result);
+      return result;
+    } catch (error) {
+      console.error("Error calculating upgrade price:", error);
+      return null;
+    }
+  };
+
+  const handleStartUpgrade = () => {
+    setShowUpgradeModal(true);
+  };
+
+  const handleUpgradePlan = async (targetPlan: string) => {
+    if (!user?.id || !token) return;
+
+    setSelectedUpgradePlan(targetPlan);
+
+    // Calculate upgrade pricing details for display
+    try {
+      const upgradeDetails = await calculateUpgradePrice(targetPlan);
+      setPendingUpgradeDetails(upgradeDetails);
+    } catch (error) {
+      console.error("Error calculating upgrade details for display:", error);
+      setPendingUpgradeDetails(null);
+    }
+
+    setUpgradeConfirmation(true);
+  };
+
+  const confirmUpgrade = async () => {
+    if (!selectedUpgradePlan || !user?.id || !token) {
+      console.log("Missing required data for upgrade:", {
+        selectedUpgradePlan,
+        userId: user?.id,
+        token: !!token,
+      });
+      return;
+    }
+
+    console.log("Starting upgrade confirmation for plan:", selectedUpgradePlan);
+    setProcessingUpgrade(true);
+    try {
+      console.log("Calculating upgrade price...");
+      const upgradeDetails = await calculateUpgradePrice(selectedUpgradePlan);
+      console.log("Upgrade details:", upgradeDetails);
+
+      if (!upgradeDetails) {
+        console.log("Failed to calculate upgrade details");
+        showAlertModal("Error", "Unable to calculate upgrade pricing", "error");
+        return;
+      }
+
+      // For now, just create a new token without payment processing
+      // In a real implementation, you would process payment first
+      console.log("Proceeding with upgrade process...");
+      await processUpgrade(selectedUpgradePlan);
+    } catch (error) {
+      console.error("Upgrade error:", error);
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error occurred";
+      showAlertModal(
+        "Upgrade Failed",
+        `Plan upgrade failed: ${errorMessage}. Please check the console for details.`,
+        "error"
+      );
+    } finally {
+      setProcessingUpgrade(false);
+      setUpgradeConfirmation(false);
+      setShowUpgradeModal(false);
+      setSelectedUpgradePlan(null);
+      setPendingUpgradeDetails(null);
+    }
+  };
+
+  const processUpgrade = async (targetPlan: string, chargeId?: string) => {
+    if (!user?.id || !token) return;
+
+    try {
+      console.log("Starting upgrade process for plan:", targetPlan);
+      console.log("Current user:", user.id);
+      console.log("Current token:", token);
+
+      // 1. Deactivate current token
+      console.log("Deactivating current token...");
+      await TokenService.deactivateToken(user.id);
+      console.log("Token deactivated successfully");
+
+      // 2. Create new token with target plan using sophisticated composition
+      const billingCycle =
+        billingSettings?.billing_cycle === "yearly" ? "yearly" : "monthly";
+      const newTokenData = composeToken(targetPlan, billingCycle);
+
+      console.log("Creating new token with sophisticated data:", newTokenData);
+      const newToken = await TokenService.createToken(user.id, newTokenData);
+      console.log("New token created:", newToken);
+
+      // 3. Create subscription history record
+      const upgradeDetails = await calculateUpgradePrice(targetPlan);
+      if (upgradeDetails) {
+        console.log("Creating subscription record...");
+
+        // Map plan name to plan type enum
+        const planTypeMapping: Record<
+          string,
+          "basic" | "standard" | "enterprise"
+        > = {
+          starter: "basic",
+          basic: "basic",
+          pro: "standard",
+          standard: "standard",
+          enterprise: "enterprise",
+        };
+
+        const planType = planTypeMapping[targetPlan.toLowerCase()] || "basic";
+
+        await SubscriptionService.createSubscription({
+          user_id: user.id,
+          plan_name: targetPlan,
+          plan_type: planType,
+          amount: upgradeDetails.upgradePrice,
+          currency: upgradeDetails.currency,
+          billing_cycle:
+            billingSettings?.billing_cycle === "yearly" ? "yearly" : "monthly",
+          transaction_id: chargeId || null,
+          status: "active",
+          started_at: new Date().toISOString(),
+          expires_at:
+            billingSettings?.billing_cycle === "yearly"
+              ? new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString()
+              : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+          cancelled_at: null,
+          payment_method: "credit_card",
+        });
+        console.log("Subscription record created");
+      }
+
+      // 4. Refresh token and user data
+      console.log("Refreshing token...");
+      await refreshToken();
+      console.log("Token refreshed");
+
+      const planName =
+        availablePlans.find((p) => p.key === targetPlan)?.name || targetPlan;
+      showAlertModal(
+        "Success",
+        `Successfully upgraded to ${planName} plan!`,
+        "success"
+      );
+    } catch (error) {
+      console.error("Upgrade processing error:", error);
+      // Show more detailed error information
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error occurred";
+      showAlertModal(
+        "Upgrade Failed",
+        `Plan upgrade failed: ${errorMessage}. Please check the console for more details.`,
+        "error"
+      );
+      throw error;
+    }
+  };
+
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString();
   };
 
+  const getNextBillingDate = () => {
+    if (!token?.expiredAt || !billingSettings?.auto_renewal_enabled) {
+      return null;
+    }
+
+    // If auto-renewal is enabled, next billing date is the token expiration date
+    return token.expiredAt;
+  };
+
   const formatCurrency = (amount: number, currency: string = "THB") => {
     return PricingService.formatCurrency(amount, currency);
+  };
+
+  // Calculate separate statistics for different order types
+  const calculateOrderStatistics = () => {
+    // Calculate subscription-based statistics
+    const subscriptionStats = {
+      count: subscriptionSummary?.total_subscriptions || 0,
+      totalSpent: subscriptionSummary?.total_spent || 0,
+      months: subscriptionSummary?.current_streak_months || 0,
+      memberSince: subscriptionSummary?.first_subscription_date
+        ? new Date(subscriptionSummary.first_subscription_date).getFullYear()
+        : null,
+    };
+
+    // Calculate payment order statistics
+    const paymentOrderStats = {
+      count: paymentOrders.length,
+      totalSpent: paymentOrders.reduce((sum, order) => {
+        return sum + (order.total_amount || 0);
+      }, 0),
+      firstOrder:
+        paymentOrders.length > 0
+          ? Math.min(
+              ...paymentOrders.map((order) =>
+                new Date(order.created_at).getTime()
+              )
+            )
+          : null,
+    };
+
+    // Calculate combined statistics
+    const combinedStats = {
+      totalCount: subscriptionStats.count + paymentOrderStats.count,
+      totalSpent: subscriptionStats.totalSpent + paymentOrderStats.totalSpent,
+      earliestDate: Math.min(
+        ...[
+          subscriptionStats.memberSince
+            ? new Date(`${subscriptionStats.memberSince}-01-01`).getTime()
+            : Infinity,
+          paymentOrderStats.firstOrder || Infinity,
+        ].filter((date) => date !== Infinity)
+      ),
+    };
+
+    return {
+      subscription: subscriptionStats,
+      paymentOrder: paymentOrderStats,
+      combined: combinedStats,
+    };
+  };
+
+  // Pagination helper functions for Purchase History
+  const getPaginatedHistory = () => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    return purchaseHistory.slice(startIndex, endIndex);
+  };
+
+  const getTotalPages = () => {
+    return Math.ceil(purchaseHistory.length / itemsPerPage);
+  };
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+  };
+
+  const handlePreviousPage = () => {
+    if (currentPage > 1) {
+      setCurrentPage(currentPage - 1);
+    }
+  };
+
+  const handleNextPage = () => {
+    if (currentPage < getTotalPages()) {
+      setCurrentPage(currentPage + 1);
+    }
+  };
+
+  // Reset to first page when purchase history changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [purchaseHistory]);
+
+  // Token generation helpers (similar to n8n function)
+  const randStr = (len = 20) => {
+    let out = "";
+    while (out.length < len) out += Math.random().toString(36).slice(2);
+    return out.slice(0, len);
+  };
+
+  const normalizePackage = (p: string) => {
+    return String(p || "")
+      .trim()
+      .toLowerCase();
+  };
+
+  const packageCode = (p: string) => {
+    const n = normalizePackage(p);
+    const cleaned = n.replace(/[^a-z0-9]/gi, "");
+    return (cleaned.slice(0, 4) || "pkg").toUpperCase();
+  };
+
+  const generateToken = (pkgName: string) => {
+    const ts = Date.now().toString(36);
+    const rnd = randStr(16);
+    const salt = randStr(6);
+    const pfx = packageCode(pkgName);
+    return `${pfx}-${ts}-${rnd}${salt}`;
+  };
+
+  // Feature catalog
+  const FEATURE_UNITS = {
+    line_chat: "flag",
+    facebook_chat: "flag",
+    rag_files: "files",
+    calendar_agent: "flag",
+    gdrive_agent: "flag",
+  };
+
+  const PLAN_FEATURES: Record<
+    string,
+    Array<{ feature_key: string; unit: string; value: number | null }>
+  > = {
+    basic: [
+      { feature_key: "line_chat", unit: FEATURE_UNITS.line_chat, value: null },
+      { feature_key: "rag_files", unit: FEATURE_UNITS.rag_files, value: 3 },
+    ],
+    standard: [
+      { feature_key: "line_chat", unit: FEATURE_UNITS.line_chat, value: null },
+      {
+        feature_key: "facebook_chat",
+        unit: FEATURE_UNITS.facebook_chat,
+        value: null,
+      },
+      { feature_key: "rag_files", unit: FEATURE_UNITS.rag_files, value: 5 },
+    ],
+    enterprise: [
+      { feature_key: "line_chat", unit: FEATURE_UNITS.line_chat, value: null },
+      {
+        feature_key: "facebook_chat",
+        unit: FEATURE_UNITS.facebook_chat,
+        value: null,
+      },
+      {
+        feature_key: "calendar_agent",
+        unit: FEATURE_UNITS.calendar_agent,
+        value: null,
+      },
+      {
+        feature_key: "gdrive_agent",
+        unit: FEATURE_UNITS.gdrive_agent,
+        value: null,
+      },
+      { feature_key: "rag_files", unit: FEATURE_UNITS.rag_files, value: 10 },
+    ],
+  };
+
+  const calcExpiry = (type = "monthly") => {
+    const now = new Date();
+    const expiry = new Date(now);
+    if (type.toLowerCase() === "monthly") expiry.setMonth(now.getMonth() + 1);
+    else if (type.toLowerCase() === "yearly")
+      expiry.setFullYear(now.getFullYear() + 1);
+    return expiry.toISOString();
+  };
+
+  const composeToken = (pkg: string, type: string) => {
+    const cleanPkg = normalizePackage(pkg || "basic");
+    const tokenStr = generateToken(cleanPkg);
+    const features = PLAN_FEATURES[cleanPkg] || PLAN_FEATURES["basic"];
+    const expiredAt = calcExpiry(type);
+
+    // Filter out add-ons that are now included in the base plan
+    const baseFeatureKeys = features.map((f) => f.feature_key);
+    const filteredAddons = (token?.addons || []).filter((addon) => {
+      // If the add-on's feature is now included in the base plan, remove it
+      return !baseFeatureKeys.includes(
+        addon.feature_key || addon.key || addon.name
+      );
+    });
+
+    console.log("Base features in new plan:", baseFeatureKeys);
+    console.log("Current add-ons:", token?.addons || []);
+    console.log(
+      "Filtered add-ons (after removing included features):",
+      filteredAddons
+    );
+
+    return {
+      package: cleanPkg,
+      token: tokenStr,
+      status: "active", // Set to active for upgrades
+      type: (type || "monthly").toLowerCase(),
+      features,
+      addons: filteredAddons, // Use filtered add-ons instead of all
+      expiredAt,
+    };
+  };
+
+  const getPlanFeatures = (planKey: string) => {
+    const cleanPkg = normalizePackage(planKey);
+    return PLAN_FEATURES[cleanPkg] || PLAN_FEATURES["basic"];
+  };
+
+  const formatFeatureValue = (feature: {
+    feature_key: string;
+    unit: string;
+    value: number | null;
+  }) => {
+    if (feature.value === null) {
+      return "Enabled";
+    }
+    if (feature.unit === "files") {
+      return `${feature.value} files`;
+    }
+    return feature.value.toString();
+  };
+
+  const getAddonsIncludedInPlan = (planKey: string) => {
+    const cleanPkg = normalizePackage(planKey);
+    const baseFeatureKeys = (
+      PLAN_FEATURES[cleanPkg] || PLAN_FEATURES["basic"]
+    ).map((f) => f.feature_key);
+
+    // Find current add-ons that would be included in the new plan
+    return (token?.addons || []).filter((addon) => {
+      return baseFeatureKeys.includes(
+        addon.feature_key || addon.key || addon.name
+      );
+    });
+  };
+
+  const getRemainingAddons = (planKey: string) => {
+    const cleanPkg = normalizePackage(planKey);
+    const baseFeatureKeys = (
+      PLAN_FEATURES[cleanPkg] || PLAN_FEATURES["basic"]
+    ).map((f) => f.feature_key);
+
+    // Find current add-ons that would still be add-ons in the new plan
+    return (token?.addons || []).filter((addon) => {
+      return !baseFeatureKeys.includes(
+        addon.feature_key || addon.key || addon.name
+      );
+    });
   };
 
   const showAlertModal = (
@@ -500,6 +1135,110 @@ Generated on: ${new Date().toLocaleString()}
       }
       return newSet;
     });
+  };
+
+  // Create unified purchase history from both orders and subscriptions
+  const createUnifiedPurchaseHistory = (
+    subscriptions: SubscriptionHistory[],
+    paymentOrders: PaymentOrder[],
+    generalOrders: any[]
+  ): PurchaseHistoryItem[] => {
+    const allItems: PurchaseHistoryItem[] = [];
+
+    // Add subscription history items (Yellow box - Subscription Purchase)
+    subscriptions.forEach((subscription) => {
+      allItems.push({
+        id: `subscription-${subscription.id}`,
+        type: "subscription",
+        date: subscription.created_at,
+        title: "Subscription Purchase (1 item)",
+        orderNumber: subscription.transaction_id || subscription.id.slice(0, 8),
+        items: [
+          {
+            name: "Token Renewal",
+            description: `${SubscriptionService.getPlanDisplayName(
+              subscription.plan_type
+            )} subscription renewal`,
+            category: "subscription",
+            price: subscription.amount,
+            quantity: 1,
+          },
+        ],
+        total: subscription.amount,
+        currency: subscription.currency,
+        status: subscription.status,
+        paymentMethod: subscription.payment_method || "credit card",
+        planType: subscription.plan_type,
+        planName: subscription.plan_name,
+        features: [], // Will be filled based on plan type
+        nextExpiry: subscription.expires_at || "",
+      });
+    });
+
+    // Add payment orders (Purple box - Add-on Purchase)
+    paymentOrders
+      .filter((order) => order.status === "completed")
+      .forEach((order) => {
+        const orderItems = Array.isArray(order.items) ? order.items : [];
+        allItems.push({
+          id: `order-${order.id}`,
+          type: "order",
+          date: order.created_at,
+          title: `Add-on Purchase (${orderItems.length} item${
+            orderItems.length > 1 ? "s" : ""
+          })`,
+          orderNumber: order.id.slice(0, 8),
+          items: orderItems.map((item) => ({
+            name: item.feature?.name || "Unknown Item",
+            description: item.feature?.description || "",
+            category: item.feature?.category || "agent",
+            price: item.price || 0,
+            quantity: item.quantity || 1,
+          })),
+          total: order.total_amount,
+          currency: order.currency,
+          status: "completed",
+          paymentMethod: order.payment_method || "credit card",
+          orderId: order.id,
+        });
+      });
+
+    // Add general orders (Purple box - Add-on Purchase)
+    generalOrders
+      .filter(
+        (order) => order.status === "completed" || order.status === "delivered"
+      )
+      .forEach((order) => {
+        const orderItems = Array.isArray(order.order_items)
+          ? order.order_items
+          : [];
+        allItems.push({
+          id: `general-${order.id}`,
+          type: "order",
+          date: order.created_at,
+          title: `Add-on Purchase (${orderItems.length} item${
+            orderItems.length > 1 ? "s" : ""
+          })`,
+          orderNumber: order.order_number || order.id.slice(0, 8),
+          items: orderItems.map((item: any) => ({
+            name: item.product_name || "Unknown Item",
+            description: item.product_description || "",
+            category: item.product_category || "agent",
+            price: item.unit_price || 0,
+            quantity: item.quantity || 1,
+          })),
+          total: order.total_amount,
+          currency: order.currency || "THB",
+          status: order.status,
+          paymentMethod: "credit card",
+          orderId: order.id,
+        });
+      });
+
+    // Sort by date (newest first)
+    return allItems.sort(
+      (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+    );
   };
 
   const getIncludedFeatures = () => {
@@ -892,9 +1631,10 @@ Generated on: ${new Date().toLocaleString()}
                       {t("users.nextBilling")}
                     </div>
                     <div className="text-xs text-gray-600 dark:text-gray-400">
-                      {token.expiredAt
-                        ? formatDate(token.expiredAt)
-                        : t("users.never")}
+                      {billingSettings?.auto_renewal_enabled &&
+                      getNextBillingDate()
+                        ? formatDate(getNextBillingDate()!)
+                        : t("users.noAutoRenewal")}
                     </div>
                   </div>
                 </div>
@@ -937,51 +1677,124 @@ Generated on: ${new Date().toLocaleString()}
                 </div>
               </div>
 
-              {/* Subscription Summary */}
-              {subscriptionSummary && (
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-4 bg-gray-50 dark:bg-gray-800 rounded-xl">
-                  <div className="text-center">
-                    <div className="text-lg font-bold text-gray-900 dark:text-gray-100">
-                      {subscriptionSummary.total_subscriptions}
-                    </div>
-                    <div className="text-xs text-gray-600 dark:text-gray-400">
-                      {t("users.totalSubscriptions")}
+              {/* Enhanced Overview with Separate Statistics */}
+              {(subscriptionSummary || paymentOrders.length > 0) && (
+                <div className="space-y-4">
+                  {/* Combined Overview */}
+                  <div>
+                    <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                      {t("users.overallOverview")}
+                    </h4>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-xl border border-blue-200 dark:border-blue-800">
+                      <div className="text-center">
+                        <div className="text-lg font-bold text-gray-900 dark:text-gray-100">
+                          {calculateOrderStatistics().combined.totalCount}
+                        </div>
+                        <div className="text-xs text-gray-600 dark:text-gray-400">
+                          {t("users.totalOrders")}
+                        </div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-lg font-bold text-green-600 dark:text-green-400">
+                          {formatCurrency(
+                            calculateOrderStatistics().combined.totalSpent
+                          )}
+                        </div>
+                        <div className="text-xs text-gray-600 dark:text-gray-400">
+                          {t("users.totalSpent")}
+                        </div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-lg font-bold text-indigo-600 dark:text-indigo-400">
+                          {subscriptionSummary?.current_streak_months || 0}
+                        </div>
+                        <div className="text-xs text-gray-600 dark:text-gray-400">
+                          {t("users.streakMonths")}
+                        </div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-lg font-bold text-blue-600 dark:text-blue-400">
+                          {isFinite(
+                            calculateOrderStatistics().combined.earliestDate
+                          )
+                            ? new Date(
+                                calculateOrderStatistics().combined.earliestDate
+                              ).getFullYear()
+                            : "-"}
+                        </div>
+                        <div className="text-xs text-gray-600 dark:text-gray-400">
+                          {t("users.memberSince")}
+                        </div>
+                      </div>
                     </div>
                   </div>
-                  <div className="text-center">
-                    <div className="text-lg font-bold text-green-600 dark:text-green-400">
-                      {SubscriptionService.formatCurrency(
-                        subscriptionSummary.total_spent
-                      )}
-                    </div>
-                    <div className="text-xs text-gray-600 dark:text-gray-400">
-                      {t("users.totalSpent")}
-                    </div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-lg font-bold text-indigo-600 dark:text-indigo-400">
-                      {subscriptionSummary.current_streak_months}
-                    </div>
-                    <div className="text-xs text-gray-600 dark:text-gray-400">
-                      {t("users.streakMonths")}
-                    </div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-lg font-bold text-blue-600 dark:text-blue-400">
-                      {subscriptionSummary.first_subscription_date
-                        ? new Date(
-                            subscriptionSummary.first_subscription_date
-                          ).getFullYear()
-                        : "-"}
-                    </div>
-                    <div className="text-xs text-gray-600 dark:text-gray-400">
-                      {t("users.memberSince")}
-                    </div>
+
+                  {/* Separate Statistics */}
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    {/* Subscription Statistics */}
+                    {subscriptionSummary && (
+                      <div>
+                        <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                          {t("users.subscriptionOverview")}
+                        </h4>
+                        <div className="grid grid-cols-2 gap-3 p-4 bg-purple-50 dark:bg-purple-900/20 rounded-xl border border-purple-200 dark:border-purple-800">
+                          <div className="text-center">
+                            <div className="text-lg font-bold text-purple-700 dark:text-purple-300">
+                              {calculateOrderStatistics().subscription.count}
+                            </div>
+                            <div className="text-xs text-gray-600 dark:text-gray-400">
+                              {t("users.subscriptions")}
+                            </div>
+                          </div>
+                          <div className="text-center">
+                            <div className="text-lg font-bold text-green-600 dark:text-green-400">
+                              {formatCurrency(
+                                calculateOrderStatistics().subscription
+                                  .totalSpent
+                              )}
+                            </div>
+                            <div className="text-xs text-gray-600 dark:text-gray-400">
+                              {t("users.subscriptionSpent")}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Payment Order Statistics */}
+                    {paymentOrders.length > 0 && (
+                      <div>
+                        <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                          {t("users.purchaseOverview")}
+                        </h4>
+                        <div className="grid grid-cols-2 gap-3 p-4 bg-green-50 dark:bg-green-900/20 rounded-xl border border-green-200 dark:border-green-800">
+                          <div className="text-center">
+                            <div className="text-lg font-bold text-green-700 dark:text-green-300">
+                              {calculateOrderStatistics().paymentOrder.count}
+                            </div>
+                            <div className="text-xs text-gray-600 dark:text-gray-400">
+                              {t("users.purchases")}
+                            </div>
+                          </div>
+                          <div className="text-center">
+                            <div className="text-lg font-bold text-green-600 dark:text-green-400">
+                              {formatCurrency(
+                                calculateOrderStatistics().paymentOrder
+                                  .totalSpent
+                              )}
+                            </div>
+                            <div className="text-xs text-gray-600 dark:text-gray-400">
+                              {t("users.purchaseSpent")}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
 
-              {/* Purchase History (Subscriptions & Add-ons) */}
+              {/* Purchase History (Unified Orders & Subscriptions) */}
               <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-2">
@@ -990,9 +1803,7 @@ Generated on: ${new Date().toLocaleString()}
                       Purchase History
                     </h3>
                   </div>
-                  {(subscriptionHistory.length > 0 ||
-                    paymentOrders.length > 0 ||
-                    generalOrders.length > 0) && (
+                  {purchaseHistory.length > 0 && (
                     <button className="text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 text-sm font-medium">
                       {t("users.viewAll")}
                     </button>
@@ -1003,131 +1814,120 @@ Generated on: ${new Date().toLocaleString()}
                   <div className="flex justify-center py-8">
                     <div className="animate-spin w-6 h-6 border-2 border-gray-300 border-t-indigo-600 rounded-full"></div>
                   </div>
-                ) : subscriptionHistory.length > 0 ||
-                  paymentOrders.length > 0 ||
-                  generalOrders.length > 0 ? (
-                  <div className="space-y-3">
-                    {/* Subscription History */}
-                    {subscriptionHistory.map((subscription) => {
-                      const statusDisplay =
-                        SubscriptionService.getStatusDisplay(
-                          subscription.status
-                        );
-                      return (
-                        <div
-                          key={`subscription-${subscription.id}`}
-                          className="flex items-center justify-between p-3 rounded-lg bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600"
-                        >
-                          <div className="flex items-center gap-3">
-                            <div className="p-2 rounded-lg bg-indigo-100 dark:bg-indigo-900/30">
-                              <TrendingUp className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-                            </div>
-                            <div>
-                              <div className="font-medium text-gray-900 dark:text-gray-100 text-sm">
-                                {SubscriptionService.getPlanDisplayName(
-                                  subscription.plan_type
-                                )}{" "}
-                                Subscription
-                              </div>
-                              <div className="text-xs text-gray-600 dark:text-gray-400">
-                                {formatDate(subscription.started_at)} -{" "}
-                                {subscription.expires_at
-                                  ? formatDate(subscription.expires_at)
-                                  : t("users.ongoing")}
-                              </div>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-3">
-                            <div className="text-right">
-                              <div className="font-semibold text-gray-900 dark:text-gray-100 text-sm">
-                                {SubscriptionService.formatCurrency(
-                                  subscription.amount
-                                )}
-                              </div>
-                              <div className="text-xs text-gray-500">
-                                /
-                                {subscription.billing_cycle === "monthly"
-                                  ? t("users.month")
-                                  : t("users.year")}
-                              </div>
-                            </div>
-                            <span
-                              className={`px-2 py-1 rounded-full text-xs font-medium ${statusDisplay.bgColor} ${statusDisplay.color}`}
-                            >
-                              {statusDisplay.label}
-                            </span>
-                          </div>
-                        </div>
-                      );
-                    })}
+                ) : purchaseHistory.length > 0 ? (
+                  <div className="space-y-4">
+                    {/* Pagination Info */}
+                    <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+                      <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
+                        {t("users.showing")}{" "}
+                        <span className="font-semibold text-gray-900 dark:text-gray-100">
+                          {(currentPage - 1) * itemsPerPage + 1}
+                        </span>{" "}
+                        {t("users.to")}{" "}
+                        <span className="font-semibold text-gray-900 dark:text-gray-100">
+                          {Math.min(
+                            currentPage * itemsPerPage,
+                            purchaseHistory.length
+                          )}
+                        </span>{" "}
+                        {t("users.of")}{" "}
+                        <span className="font-semibold text-gray-900 dark:text-gray-100">
+                          {purchaseHistory.length}
+                        </span>{" "}
+                        {t("users.orders")}
+                      </span>
+                      <span className="text-sm font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 px-3 py-1 rounded-full">
+                        {t("users.page")} {currentPage} {t("users.of")}{" "}
+                        {getTotalPages()}
+                      </span>
+                    </div>
 
-                    {/* Payment Orders (Add-ons) */}
-                    {paymentOrders
-                      .filter((order) => order.status === "completed")
-                      .map((order) => {
-                        const isExpanded = expandedOrders.has(order.id);
+                    {/* Purchase History Items */}
+                    <div className="space-y-3">
+                      {getPaginatedHistory().map((item) => {
+                        const isExpanded = expandedOrders.has(item.id);
+                        const isSubscription = item.type === "subscription";
+
                         return (
                           <div
-                            key={`order-${order.id}`}
+                            key={item.id}
                             className="rounded-lg bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 overflow-hidden"
                           >
-                            {/* Main Order Info */}
+                            {/* Main Item Info */}
                             <div className="flex items-center justify-between p-3">
                               <div className="flex items-center gap-3">
-                                <div className="p-2 rounded-lg bg-purple-100 dark:bg-purple-900/30">
-                                  <Package className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                                {/* Icon with color coding */}
+                                <div
+                                  className={`p-2 rounded-lg ${
+                                    isSubscription
+                                      ? "bg-yellow-100 dark:bg-yellow-900/30"
+                                      : "bg-purple-100 dark:bg-purple-900/30"
+                                  }`}
+                                >
+                                  {isSubscription ? (
+                                    <RefreshCw
+                                      className={`w-4 h-4 ${
+                                        isSubscription
+                                          ? "text-yellow-600 dark:text-yellow-400"
+                                          : "text-purple-600 dark:text-purple-400"
+                                      }`}
+                                    />
+                                  ) : (
+                                    <Package
+                                      className={`w-4 h-4 ${
+                                        isSubscription
+                                          ? "text-yellow-600 dark:text-yellow-400"
+                                          : "text-purple-600 dark:text-purple-400"
+                                      }`}
+                                    />
+                                  )}
                                 </div>
+
                                 <div>
                                   <div className="font-medium text-gray-900 dark:text-gray-100 text-sm">
-                                    Add-on Purchase (
-                                    {Array.isArray(order.items)
-                                      ? order.items.length
-                                      : 0}{" "}
-                                    item
-                                    {Array.isArray(order.items) &&
-                                    order.items.length > 1
-                                      ? "s"
-                                      : ""}
-                                    )
+                                    {item.title}
                                   </div>
                                   <div className="text-xs text-gray-600 dark:text-gray-400">
-                                    {formatDate(order.created_at)} • Order #
-                                    {order.id.slice(0, 8)}
+                                    {formatDate(item.date)} • Order #
+                                    {item.orderNumber}
                                   </div>
                                   <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                                    {Array.isArray(order.items) &&
-                                    order.items.length > 0
-                                      ? order.items
-                                          .map(
-                                            (item) =>
-                                              item.feature?.name ||
-                                              "Unknown Item"
-                                          )
-                                          .join(", ")
-                                      : "No items"}
+                                    {isSubscription
+                                      ? "token renewal"
+                                      : item.items
+                                          .map((orderItem) => orderItem.name)
+                                          .join(", ")}
                                   </div>
                                 </div>
                               </div>
+
                               <div className="flex items-center gap-2">
                                 <div className="text-right">
                                   <div className="font-semibold text-gray-900 dark:text-gray-100 text-sm">
-                                    {formatCurrency(
-                                      order.total_amount,
-                                      order.currency
-                                    )}
+                                    {formatCurrency(item.total, item.currency)}
                                   </div>
                                   <div className="text-xs text-gray-500">
-                                    one-time
+                                    {isSubscription
+                                      ? "subscription"
+                                      : "one-time"}
                                   </div>
                                 </div>
-                                <span className="px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300">
-                                  Purchased
+
+                                {/* Status Badge */}
+                                <span
+                                  className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                    isSubscription
+                                      ? "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300"
+                                      : "bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300"
+                                  }`}
+                                >
+                                  {isSubscription ? "Subscription" : "Add-on"}
                                 </span>
 
                                 {/* Action Buttons */}
                                 <div className="flex gap-1">
                                   <button
-                                    onClick={() => toggleOrderDetails(order.id)}
+                                    onClick={() => toggleOrderDetails(item.id)}
                                     className="p-1.5 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600 rounded"
                                     title={
                                       isExpanded
@@ -1141,24 +1941,6 @@ Generated on: ${new Date().toLocaleString()}
                                       <Eye className="w-4 h-4" />
                                     )}
                                   </button>
-                                  <button
-                                    onClick={() =>
-                                      downloadReceipt(order, "json")
-                                    }
-                                    className="p-1.5 text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-200 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded"
-                                    title="Download JSON Receipt"
-                                  >
-                                    <Download className="w-4 h-4" />
-                                  </button>
-                                  <button
-                                    onClick={() =>
-                                      downloadReceipt(order, "txt")
-                                    }
-                                    className="p-1.5 text-green-500 hover:text-green-700 dark:text-green-400 dark:hover:text-green-200 hover:bg-green-50 dark:hover:bg-green-900/20 rounded"
-                                    title="Download Text Receipt"
-                                  >
-                                    <Download className="w-4 h-4" />
-                                  </button>
                                 </div>
                               </div>
                             </div>
@@ -1170,10 +1952,16 @@ Generated on: ${new Date().toLocaleString()}
                                   <div className="grid grid-cols-2 gap-4 text-sm">
                                     <div>
                                       <span className="text-gray-500 dark:text-gray-400">
-                                        Order ID:
+                                        {isSubscription
+                                          ? "Subscription ID:"
+                                          : "Order ID:"}
                                       </span>
                                       <div className="font-mono text-xs bg-gray-200 dark:bg-gray-700 px-2 py-1 rounded mt-1">
-                                        {order.id}
+                                        {item.orderId ||
+                                          item.id.replace(
+                                            /^(subscription|order|general)-/,
+                                            ""
+                                          )}
                                       </div>
                                     </div>
                                     <div>
@@ -1181,248 +1969,95 @@ Generated on: ${new Date().toLocaleString()}
                                         Payment Method:
                                       </span>
                                       <div className="font-medium text-gray-900 dark:text-gray-100 mt-1">
-                                        {order.payment_method}
+                                        {item.paymentMethod}
                                       </div>
                                     </div>
                                   </div>
 
-                                  <div>
-                                    <span className="text-gray-500 dark:text-gray-400 text-sm">
-                                      Items Purchased:
-                                    </span>
-                                    <div className="mt-2 space-y-2">
-                                      {Array.isArray(order.items) &&
-                                      order.items.length > 0 ? (
-                                        order.items.map((item, idx) => (
+                                  {isSubscription ? (
+                                    /* Subscription Details */
+                                    <div>
+                                      <span className="text-gray-500 dark:text-gray-400 text-sm">
+                                        Plan Details:
+                                      </span>
+                                      <div className="mt-2 p-3 bg-white dark:bg-gray-700 rounded border">
+                                        <div className="font-medium text-gray-900 dark:text-gray-100 text-sm mb-2">
+                                          {item.planName ||
+                                            `${item.planType} Plan`}
+                                        </div>
+                                        <div className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+                                          Features: Token renewal, API access,
+                                          Premium support
+                                        </div>
+                                        <div className="text-xs text-yellow-600 dark:text-yellow-400">
+                                          Next Expiry:{" "}
+                                          {item.nextExpiry
+                                            ? formatDate(item.nextExpiry)
+                                            : "N/A"}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    /* Order Items Details */
+                                    <div>
+                                      <span className="text-gray-500 dark:text-gray-400 text-sm">
+                                        Items Purchased:
+                                      </span>
+                                      <div className="mt-2 space-y-2">
+                                        {item.items.map((orderItem, idx) => (
                                           <div
                                             key={idx}
                                             className="flex justify-between items-start p-2 bg-white dark:bg-gray-700 rounded border"
                                           >
                                             <div className="flex-1">
                                               <div className="font-medium text-gray-900 dark:text-gray-100 text-sm">
-                                                {item.feature?.name ||
-                                                  "Unknown Item"}
+                                                {orderItem.name}
                                               </div>
-                                              {item.feature?.description && (
+                                              {orderItem.description && (
                                                 <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                                                  {item.feature.description}
+                                                  {orderItem.description}
                                                 </div>
                                               )}
                                               <div className="text-xs text-purple-600 dark:text-purple-400 mt-1">
-                                                Category:{" "}
-                                                {item.feature?.category ||
-                                                  "N/A"}
+                                                Category: {orderItem.category}
                                               </div>
                                             </div>
                                             <div className="text-right ml-3">
                                               <div className="font-semibold text-gray-900 dark:text-gray-100 text-sm">
                                                 {formatCurrency(
-                                                  (item.price || 0) *
-                                                    (item.quantity || 1),
-                                                  order.currency
+                                                  orderItem.price *
+                                                    orderItem.quantity,
+                                                  item.currency
                                                 )}
                                               </div>
                                               <div className="text-xs text-gray-500">
                                                 {formatCurrency(
-                                                  item.price || 0,
-                                                  order.currency
+                                                  orderItem.price,
+                                                  item.currency
                                                 )}{" "}
-                                                × {item.quantity || 1}
+                                                × {orderItem.quantity}
                                               </div>
                                             </div>
                                           </div>
-                                        ))
-                                      ) : (
-                                        <div className="text-gray-500 dark:text-gray-400 text-sm">
-                                          No items found
-                                        </div>
-                                      )}
+                                        ))}
+                                      </div>
                                     </div>
-                                  </div>
+                                  )}
 
                                   <div className="flex justify-between items-center pt-2 border-t border-gray-200 dark:border-gray-600">
                                     <span className="font-medium text-gray-900 dark:text-gray-100">
                                       Total:
                                     </span>
-                                    <span className="font-bold text-lg text-purple-600 dark:text-purple-400">
-                                      {formatCurrency(
-                                        order.total_amount,
-                                        order.currency
-                                      )}
-                                    </span>
-                                  </div>
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-
-                    {/* General Orders */}
-                    {generalOrders
-                      .filter(
-                        (order) =>
-                          order.status === "completed" ||
-                          order.status === "delivered"
-                      )
-                      .map((order) => {
-                        const isExpanded = expandedOrders.has(order.id);
-                        return (
-                          <div
-                            key={`general-order-${order.id}`}
-                            className="rounded-lg bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 overflow-hidden"
-                          >
-                            {/* Main Order Info */}
-                            <div className="flex items-center justify-between p-3">
-                              <div className="flex items-center gap-3">
-                                <div className="p-2 rounded-lg bg-blue-100 dark:bg-blue-900/30">
-                                  <Package className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-                                </div>
-                                <div>
-                                  <div className="font-medium text-gray-900 dark:text-gray-100 text-sm">
-                                    Order #{order.order_number} (
-                                    {Array.isArray(order.order_items)
-                                      ? order.order_items.length
-                                      : 0}{" "}
-                                    item
-                                    {Array.isArray(order.order_items) &&
-                                    order.order_items.length > 1
-                                      ? "s"
-                                      : ""}
-                                    )
-                                  </div>
-                                  <div className="text-xs text-gray-600 dark:text-gray-400">
-                                    {formatDate(order.created_at)} • Status:{" "}
-                                    {order.status}
-                                  </div>
-                                  <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                                    Customer: {order.customer_name}
-                                  </div>
-                                </div>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <div className="text-right">
-                                  <div className="font-semibold text-gray-900 dark:text-gray-100 text-sm">
-                                    {formatCurrency(
-                                      order.total_amount,
-                                      order.currency
-                                    )}
-                                  </div>
-                                  <div className="text-xs text-gray-500">
-                                    {order.status === "delivered"
-                                      ? "delivered"
-                                      : "completed"}
-                                  </div>
-                                </div>
-                                <span className="px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
-                                  Order
-                                </span>
-
-                                {/* Action Buttons */}
-                                <div className="flex gap-1">
-                                  <button
-                                    onClick={() => {
-                                      const newExpanded = new Set(
-                                        expandedOrders
-                                      );
-                                      if (isExpanded) {
-                                        newExpanded.delete(order.id);
-                                      } else {
-                                        newExpanded.add(order.id);
-                                      }
-                                      setExpandedOrders(newExpanded);
-                                    }}
-                                    className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-                                  >
-                                    <ChevronDown
-                                      className={`w-4 h-4 transition-transform ${
-                                        isExpanded ? "rotate-180" : ""
+                                    <span
+                                      className={`font-bold text-lg ${
+                                        isSubscription
+                                          ? "text-yellow-600 dark:text-yellow-400"
+                                          : "text-purple-600 dark:text-purple-400"
                                       }`}
-                                    />
-                                  </button>
-                                </div>
-                              </div>
-                            </div>
-
-                            {/* Expanded Details */}
-                            {isExpanded && (
-                              <div className="px-3 pb-3 border-t border-gray-100 dark:border-gray-600 bg-gray-50 dark:bg-gray-800/50">
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3 text-xs">
-                                  <div>
-                                    <span className="text-gray-500 dark:text-gray-400">
-                                      Customer Email:
-                                    </span>
-                                    <div className="font-medium text-gray-900 dark:text-gray-100 mt-1">
-                                      {order.customer_email}
-                                    </div>
-                                  </div>
-
-                                  <div>
-                                    <span className="text-gray-500 dark:text-gray-400 text-sm">
-                                      Items Ordered:
-                                    </span>
-                                    <div className="mt-2 space-y-2">
-                                      {Array.isArray(order.order_items) &&
-                                      order.order_items.length > 0 ? (
-                                        order.order_items.map(
-                                          (item: any, idx: number) => (
-                                            <div
-                                              key={idx}
-                                              className="flex justify-between items-start p-2 bg-white dark:bg-gray-700 rounded border"
-                                            >
-                                              <div className="flex-1">
-                                                <div className="font-medium text-gray-900 dark:text-gray-100 text-sm">
-                                                  {item.product_name ||
-                                                    "Unknown Item"}
-                                                </div>
-                                                {item.product_description && (
-                                                  <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                                                    {item.product_description}
-                                                  </div>
-                                                )}
-                                                {item.product_category && (
-                                                  <div className="text-xs text-blue-600 dark:text-blue-400 mt-1">
-                                                    Category:{" "}
-                                                    {item.product_category}
-                                                  </div>
-                                                )}
-                                              </div>
-                                              <div className="text-right ml-3">
-                                                <div className="font-semibold text-gray-900 dark:text-gray-100 text-sm">
-                                                  {formatCurrency(
-                                                    item.line_total ||
-                                                      item.unit_price *
-                                                        item.quantity,
-                                                    order.currency
-                                                  )}
-                                                </div>
-                                                <div className="text-xs text-gray-500">
-                                                  {formatCurrency(
-                                                    item.unit_price || 0,
-                                                    order.currency
-                                                  )}{" "}
-                                                  × {item.quantity || 1}
-                                                </div>
-                                              </div>
-                                            </div>
-                                          )
-                                        )
-                                      ) : (
-                                        <div className="text-gray-500 dark:text-gray-400 text-sm">
-                                          No items found
-                                        </div>
-                                      )}
-                                    </div>
-                                  </div>
-
-                                  <div className="flex justify-between items-center pt-2 border-t border-gray-200 dark:border-gray-600">
-                                    <span className="font-medium text-gray-900 dark:text-gray-100">
-                                      Total:
-                                    </span>
-                                    <span className="font-bold text-lg text-gray-900 dark:text-gray-100">
+                                    >
                                       {formatCurrency(
-                                        order.total_amount,
-                                        order.currency
+                                        item.total,
+                                        item.currency
                                       )}
                                     </span>
                                   </div>
@@ -1432,6 +2067,71 @@ Generated on: ${new Date().toLocaleString()}
                           </div>
                         );
                       })}
+                    </div>
+
+                    {/* Pagination Controls */}
+                    {getTotalPages() > 1 && (
+                      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 bg-gray-50 dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 rounded-b-lg">
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={handlePreviousPage}
+                            disabled={currentPage === 1}
+                            className="px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 hover:border-gray-400 dark:hover:border-gray-500 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white dark:disabled:hover:bg-gray-800 disabled:hover:border-gray-300 dark:disabled:hover:border-gray-600 transition-all duration-200 shadow-sm hover:shadow-md"
+                          >
+                            {t("users.previous")}
+                          </button>
+                          <button
+                            onClick={handleNextPage}
+                            disabled={currentPage === getTotalPages()}
+                            className="px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 hover:border-gray-400 dark:hover:border-gray-500 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white dark:disabled:hover:bg-gray-800 disabled:hover:border-gray-300 dark:disabled:hover:border-gray-600 transition-all duration-200 shadow-sm hover:shadow-md"
+                          >
+                            {t("users.next")}
+                          </button>
+                        </div>
+
+                        {/* Page Numbers */}
+                        <div className="flex items-center gap-1 flex-wrap justify-center sm:justify-start">
+                          {Array.from(
+                            { length: getTotalPages() },
+                            (_, i) => i + 1
+                          )
+                            .filter((page) => {
+                              const totalPages = getTotalPages();
+                              if (totalPages <= 7) return true; // Show all pages if 7 or fewer
+                              if (page === 1 || page === totalPages)
+                                return true; // Always show first and last
+                              if (Math.abs(page - currentPage) <= 2)
+                                return true; // Show 2 pages around current
+                              return false;
+                            })
+                            .map((page, index, filteredPages) => {
+                              const prevPage = filteredPages[index - 1];
+                              const showEllipsis =
+                                prevPage && page - prevPage > 1;
+
+                              return (
+                                <React.Fragment key={page}>
+                                  {showEllipsis && (
+                                    <span className="px-2 py-1 text-sm text-gray-400 dark:text-gray-500 select-none">
+                                      ...
+                                    </span>
+                                  )}
+                                  <button
+                                    onClick={() => handlePageChange(page)}
+                                    className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-all duration-200 ${
+                                      currentPage === page
+                                        ? "bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600 text-white shadow-md transform scale-105"
+                                        : "text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 hover:border-gray-400 dark:hover:border-gray-500 hover:text-gray-900 dark:hover:text-gray-100 shadow-sm hover:shadow-md"
+                                    }`}
+                                  >
+                                    {page}
+                                  </button>
+                                </React.Fragment>
+                              );
+                            })}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div className="text-center py-6">
@@ -1508,8 +2208,14 @@ Generated on: ${new Date().toLocaleString()}
 
               {/* Plan Actions */}
               <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
-                <button className="flex-1 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-medium transition-colors text-sm">
-                  {t("users.upgradePlan")}
+                <button
+                  onClick={handleStartUpgrade}
+                  disabled={
+                    loadingPlans || getAvailableUpgradePlans().length === 0
+                  }
+                  className="flex-1 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-colors text-sm"
+                >
+                  {loadingPlans ? t("common.loading") : t("users.upgradePlan")}
                 </button>
                 <button
                   onClick={() => setShowBillingManagement(true)}
@@ -1562,6 +2268,278 @@ Generated on: ${new Date().toLocaleString()}
         </div>
       </div>
 
+      {/* Plan Upgrade Modal */}
+      {showUpgradeModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 w-full max-w-md animate-in slide-in-from-bottom-4 duration-300">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                {t("users.upgradePlan")}
+              </h3>
+              <button
+                onClick={() => {
+                  setShowUpgradeModal(false);
+                  setSelectedUpgradePlan(null);
+                  setUpgradeConfirmation(false);
+                }}
+                className="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+              >
+                <X className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+
+            {!upgradeConfirmation ? (
+              <>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                  {t("users.selectUpgradePlan")}
+                </p>
+                {loadingPlans ? (
+                  <div className="flex items-center justify-center py-8">
+                    <div className="w-6 h-6 border-2 border-indigo-200 border-t-indigo-600 rounded-full animate-spin" />
+                    <span className="ml-2 text-gray-600 dark:text-gray-400">
+                      {t("common.loading")}
+                    </span>
+                  </div>
+                ) : getAvailableUpgradePlans().length === 0 ? (
+                  <div className="text-center py-8">
+                    <div className="text-gray-500 dark:text-gray-400 mb-2">
+                      {t("users.noUpgradeAvailable")}
+                    </div>
+                    <div className="text-sm text-gray-400 dark:text-gray-500">
+                      {t("users.alreadyOnHighestPlan")}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {getAvailableUpgradePlans().map((plan) => (
+                      <button
+                        key={plan.id}
+                        onClick={() => handleUpgradePlan(plan.key)}
+                        className="w-full p-4 border border-gray-200 dark:border-gray-600 rounded-lg hover:border-indigo-300 dark:hover:border-indigo-500 transition-colors text-left"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex-1">
+                            <div className="font-medium text-gray-900 dark:text-gray-100">
+                              {plan.name}
+                            </div>
+                            <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+                              {plan.description ||
+                                "Enhanced features and capabilities"}
+                            </div>
+
+                            {/* Display plan features */}
+                            <div className="space-y-1 mb-2">
+                              {getPlanFeatures(plan.key).map((feature, idx) => (
+                                <div
+                                  key={idx}
+                                  className="flex items-center text-xs text-gray-500 dark:text-gray-400"
+                                >
+                                  <CheckCircle className="w-3 h-3 text-emerald-500 mr-1" />
+                                  <span className="capitalize">
+                                    {feature.feature_key.replace("_", " ")}:{" "}
+                                    {formatFeatureValue(feature)}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+
+                            {plan.price && (
+                              <div className="text-sm font-medium text-indigo-600 dark:text-indigo-400">
+                                {formatCurrency(
+                                  parseFloat(plan.price),
+                                  plan.currency || "THB"
+                                )}
+                                /{plan.billing_cycle || "month"}
+                              </div>
+                            )}
+                          </div>
+                          <ArrowRight className="w-5 h-5 text-gray-400" />
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </>
+            ) : (
+              <>
+                <div className="mb-4">
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+                    {t("users.confirmUpgrade")}{" "}
+                    <span className="font-medium">
+                      {availablePlans.find((p) => p.key === selectedUpgradePlan)
+                        ?.name || selectedUpgradePlan}
+                    </span>{" "}
+                    plan?
+                  </p>
+
+                  {/* Show features that will be included */}
+                  {selectedUpgradePlan && (
+                    <div className="space-y-3">
+                      <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3">
+                        <h4 className="text-sm font-medium text-gray-900 dark:text-gray-100 mb-2">
+                          Base Features Included:
+                        </h4>
+                        <div className="space-y-1">
+                          {getPlanFeatures(selectedUpgradePlan).map(
+                            (feature, idx) => (
+                              <div
+                                key={idx}
+                                className="flex items-center text-xs text-gray-600 dark:text-gray-300"
+                              >
+                                <CheckCircle className="w-3 h-3 text-emerald-500 mr-2" />
+                                <span className="capitalize">
+                                  {feature.feature_key.replace("_", " ")}:{" "}
+                                  {formatFeatureValue(feature)}
+                                </span>
+                              </div>
+                            )
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Show add-ons that will be automatically included */}
+                      {getAddonsIncludedInPlan(selectedUpgradePlan).length >
+                        0 && (
+                        <div className="bg-emerald-50 dark:bg-emerald-900/20 rounded-lg p-3">
+                          <h4 className="text-sm font-medium text-emerald-800 dark:text-emerald-200 mb-2">
+                            ✨ Add-ons Now Included (No Extra Cost):
+                          </h4>
+                          <div className="space-y-1">
+                            {getAddonsIncludedInPlan(selectedUpgradePlan).map(
+                              (addon, idx) => (
+                                <div
+                                  key={idx}
+                                  className="flex items-center text-xs text-emerald-700 dark:text-emerald-300"
+                                >
+                                  <CheckCircle className="w-3 h-3 text-emerald-600 mr-2" />
+                                  <span className="capitalize">
+                                    {(
+                                      addon.feature_key ||
+                                      addon.key ||
+                                      addon.name ||
+                                      ""
+                                    ).replace("_", " ")}
+                                  </span>
+                                </div>
+                              )
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Show remaining add-ons */}
+                      {getRemainingAddons(selectedUpgradePlan).length > 0 && (
+                        <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3">
+                          <h4 className="text-sm font-medium text-blue-800 dark:text-blue-200 mb-2">
+                            📦 Remaining Add-ons:
+                          </h4>
+                          <div className="space-y-1">
+                            {getRemainingAddons(selectedUpgradePlan).map(
+                              (addon, idx) => (
+                                <div
+                                  key={idx}
+                                  className="flex items-center text-xs text-blue-700 dark:text-blue-300"
+                                >
+                                  <Package className="w-3 h-3 text-blue-600 mr-2" />
+                                  <span className="capitalize">
+                                    {(
+                                      addon.feature_key ||
+                                      addon.key ||
+                                      addon.name ||
+                                      ""
+                                    ).replace("_", " ")}
+                                  </span>
+                                </div>
+                              )
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Show upgrade pricing breakdown */}
+                      {pendingUpgradeDetails && (
+                        <div className="bg-indigo-50 dark:bg-indigo-900/20 rounded-lg p-3">
+                          <h4 className="text-sm font-medium text-indigo-800 dark:text-indigo-200 mb-2">
+                            💰 Upgrade Pricing:
+                          </h4>
+                          <div className="space-y-2 text-xs">
+                            <div className="flex justify-between items-center text-gray-600 dark:text-gray-400">
+                              <span>Current Plan Cost:</span>
+                              <span>
+                                {formatCurrency(
+                                  renewalPricing?.totalPrice || 0,
+                                  pendingUpgradeDetails.currency
+                                )}
+                              </span>
+                            </div>
+                            <div className="flex justify-between items-center text-gray-600 dark:text-gray-400">
+                              <span>New Plan Cost:</span>
+                              <span>
+                                {formatCurrency(
+                                  pendingUpgradeDetails.targetPricing
+                                    ?.totalPrice || 0,
+                                  pendingUpgradeDetails.currency
+                                )}
+                              </span>
+                            </div>
+                            <hr className="border-gray-300 dark:border-gray-600" />
+                            <div className="flex justify-between items-center font-medium text-indigo-700 dark:text-indigo-300">
+                              <span>Immediate Upgrade Cost:</span>
+                              <span>
+                                {formatCurrency(
+                                  pendingUpgradeDetails.immediateUpgradePrice ||
+                                    0,
+                                  pendingUpgradeDetails.currency
+                                )}
+                              </span>
+                            </div>
+                            <div className="flex justify-between items-center text-xs text-gray-500 dark:text-gray-400">
+                              <span>Prorated Upgrade Cost:</span>
+                              <span>
+                                {formatCurrency(
+                                  pendingUpgradeDetails.upgradePrice || 0,
+                                  pendingUpgradeDetails.currency
+                                )}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => {
+                      setUpgradeConfirmation(false);
+                      setPendingUpgradeDetails(null);
+                    }}
+                    disabled={processingUpgrade}
+                    className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg font-medium transition-colors disabled:opacity-50"
+                  >
+                    {t("common.cancel")}
+                  </button>
+                  <button
+                    onClick={confirmUpgrade}
+                    disabled={processingUpgrade}
+                    className="flex-1 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
+                  >
+                    {processingUpgrade ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                        {t("common.processing")}
+                      </>
+                    ) : (
+                      t("users.confirmUpgrade")
+                    )}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Billing Management Modal */}
       {showBillingManagement && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 z-50 animate-in fade-in duration-200">
@@ -1569,6 +2547,8 @@ Generated on: ${new Date().toLocaleString()}
             <BillingManagement
               customerId={user?.id}
               onClose={() => setShowBillingManagement(false)}
+              token={token}
+              billingSettings={billingSettings}
             />
           </div>
         </div>

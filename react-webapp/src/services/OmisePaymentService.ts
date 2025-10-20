@@ -489,7 +489,7 @@ export class OmisePaymentService {
           user_id: userId,
           total_amount: amount,
           currency: currency,
-          payment_method: paymentMethodId,
+          payment_method: paymentMethod.brand || 'credit card',
           items: { description: description || 'Cart purchase' },
           status: 'pending',
         })

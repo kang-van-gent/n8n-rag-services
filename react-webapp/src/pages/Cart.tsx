@@ -204,17 +204,7 @@ export function Cart() {
                       </p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className="px-3 py-1.5 bg-gradient-to-r from-blue-100 to-purple-100 dark:from-blue-900/30 dark:to-purple-900/30 text-blue-800 dark:text-blue-300 rounded-full text-sm font-medium border border-blue-200/50 dark:border-blue-500/30">
-                      {itemCount}{" "}
-                      {itemCount === 1 ? t("cart.item") : t("cart.items")}
-                    </span>
-                    {items.length > 0 && (
-                      <span className="px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 rounded-lg text-xs font-medium">
-                        {formatCurrency(totalAmount)}
-                      </span>
-                    )}
-                  </div>
+                  <div className="flex items-center gap-2"></div>
                 </div>
                 {items.length > 0 && (
                   <button
@@ -222,7 +212,6 @@ export function Cart() {
                     className="flex items-center justify-center gap-2 px-4 py-2.5 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-all duration-200 text-sm border border-red-200/50 dark:border-red-500/30 w-full sm:w-auto font-medium"
                   >
                     <Trash2 className="w-4 h-4" />
-                    {t("cart.clearCart")}
                   </button>
                 )}
               </div>
@@ -258,9 +247,6 @@ export function Cart() {
                       className="group relative overflow-hidden bg-white/70 dark:bg-gray-800/70 backdrop-blur-sm border border-gray-200/50 dark:border-gray-500/30 rounded-2xl p-4 sm:p-6 hover:shadow-xl hover:border-purple-200/60 dark:hover:border-purple-500/40 transition-all duration-300 hover:-translate-y-1"
                     >
                       {/* Feature Badge */}
-                      <div className="absolute top-4 right-4 px-2 py-1 bg-gradient-to-r from-purple-100 to-blue-100 dark:from-purple-900/30 dark:to-blue-900/30 text-purple-700 dark:text-purple-300 rounded-lg text-xs font-medium border border-purple-200/50 dark:border-purple-500/30">
-                        Add-on
-                      </div>
 
                       <div className="flex flex-col sm:flex-row sm:items-start gap-4">
                         {/* Feature Icon & Details */}

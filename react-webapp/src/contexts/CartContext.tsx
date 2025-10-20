@@ -9,6 +9,7 @@ import { Feature } from "../services/featureService";
 import { TokenFeatureService } from "../services/TokenFeatureService";
 import { TokenService } from "../services/tokenService";
 import { useAuth } from "./AuthContext";
+import { useToken } from "./TokenContext";
 import { OmisePaymentService, OmisePaymentMethod } from "../services";
 import { supabase } from "../lib/supabase";
 
@@ -70,6 +71,7 @@ interface CartProviderProps {
 
 export function CartProvider({ children }: CartProviderProps) {
   const { user } = useAuth();
+  const { refreshToken } = useToken();
   const [items, setItems] = useState<CartItem[]>([]);
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
   const [selectedPaymentMethod, setSelectedPaymentMethod] =
@@ -294,8 +296,18 @@ export function CartProvider({ children }: CartProviderProps) {
         }
       }
 
-      // Note: Add-ons are now tracked in payment orders only
-      console.log("✅ Add-ons recorded in payment order:", items);
+      // Add purchased add-ons to user's token
+      try {
+        await TokenService.addAddonsToToken(user.id, items);
+        console.log("✅ Add-ons added to user token:", items);
+
+        // Refresh token context to show new add-ons immediately
+        await refreshToken();
+        console.log("✅ Token refreshed with new add-ons");
+      } catch (error) {
+        console.error("Failed to add add-ons to token:", error);
+        // Don't fail the entire checkout if token update fails
+      }
 
       // Clear cart on successful checkout
       clearCart();

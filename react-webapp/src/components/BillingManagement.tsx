@@ -25,12 +25,16 @@ interface BillingManagementProps {
   customerId?: string;
   onClose?: () => void;
   className?: string;
+  token?: any;
+  billingSettings?: any;
 }
 
 export function BillingManagement({
   customerId,
   onClose,
   className,
+  token,
+  billingSettings,
 }: BillingManagementProps) {
   const { t } = useTranslation();
   const { user } = useAuth();
@@ -105,6 +109,50 @@ export function BillingManagement({
       month: "short",
       day: "numeric",
     });
+  };
+
+  const getBillingStatus = () => {
+    if (!token?.expiredAt) {
+      return { status: "No active subscription", color: "red" };
+    }
+
+    try {
+      const expiredAt = new Date(token.expiredAt);
+      const now = new Date();
+
+      if (expiredAt <= now) {
+        return { status: "Expired", color: "red" };
+      }
+
+      return { status: "Active", color: "green" };
+    } catch (error) {
+      return { status: "Unknown", color: "gray" };
+    }
+  };
+
+  const getNextBillingDate = () => {
+    if (!token?.expiredAt) {
+      return "Not available";
+    }
+
+    if (!billingSettings?.auto_renewal_enabled) {
+      return "Auto-renewal disabled";
+    }
+
+    try {
+      const expiredAt = new Date(token.expiredAt);
+      const now = new Date();
+
+      // If token is already expired, show "Expired"
+      if (expiredAt <= now) {
+        return "Expired";
+      }
+
+      return formatDate(expiredAt.toISOString());
+    } catch (error) {
+      console.error("Error formatting billing date:", error);
+      return "Not available";
+    }
   };
 
   if (loading) {
@@ -188,15 +236,39 @@ export function BillingManagement({
           <div className="space-y-6">
             {/* Account Summary */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-              <div className="p-3 sm:p-4 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-500/30">
+              <div
+                className={`p-3 sm:p-4 rounded-lg border ${
+                  getBillingStatus().color === "green"
+                    ? "bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-500/30"
+                    : getBillingStatus().color === "red"
+                    ? "bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-500/30"
+                    : "bg-gray-50 dark:bg-gray-900/20 border-gray-200 dark:border-gray-500/30"
+                }`}
+              >
                 <div className="flex items-center gap-3">
-                  <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-400 flex-shrink-0" />
+                  {getBillingStatus().color === "green" ? (
+                    <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-400 flex-shrink-0" />
+                  ) : (
+                    <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0" />
+                  )}
                   <div className="min-w-0">
-                    <div className="font-semibold text-green-900 dark:text-green-100 text-sm sm:text-base">
+                    <div
+                      className={`font-semibold text-sm sm:text-base ${
+                        getBillingStatus().color === "green"
+                          ? "text-green-900 dark:text-green-100"
+                          : "text-red-900 dark:text-red-100"
+                      }`}
+                    >
                       {t("billing.accountStatus")}
                     </div>
-                    <div className="text-xs sm:text-sm text-green-700 dark:text-green-300">
-                      {t("billing.active")}
+                    <div
+                      className={`text-xs sm:text-sm ${
+                        getBillingStatus().color === "green"
+                          ? "text-green-700 dark:text-green-300"
+                          : "text-red-700 dark:text-red-300"
+                      }`}
+                    >
+                      {getBillingStatus().status}
                     </div>
                   </div>
                 </div>
@@ -224,7 +296,7 @@ export function BillingManagement({
                       {t("billing.nextBilling")}
                     </div>
                     <div className="text-xs sm:text-sm text-purple-700 dark:text-purple-300">
-                      Nov 19, 2024
+                      {getNextBillingDate()}
                     </div>
                   </div>
                 </div>

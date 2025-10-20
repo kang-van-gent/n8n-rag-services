@@ -218,4 +218,44 @@ export class TokenService {
       throw error;
     }
   }
+
+  /**
+   * Add purchased add-ons to user's token
+   */
+  static async addAddonsToToken(userId: string, cartItems: any[]): Promise<Token> {
+    try {
+      // First get the current token to merge with existing addons
+      const currentToken = await this.getUserToken(userId);
+      
+      if (!currentToken) {
+        throw new Error('No active token found for user');
+      }
+
+      // Extract addon features from cart items
+      const newAddons = cartItems.map(item => ({
+        key: item.feature.key,
+        name: item.feature.name,
+        description: item.feature.description,
+        category: item.feature.category,
+        quantity: item.quantity,
+        price: item.price,
+        period: item.period,
+        addedAt: new Date().toISOString(),
+        orderId: null // Will be updated if needed
+      }));
+
+      // Merge with existing addons (avoid duplicates)
+      const existingAddons = currentToken.addons || [];
+      const existingKeys = new Set(existingAddons.map((addon: any) => addon.key));
+      
+      const addonsToAdd = newAddons.filter(addon => !existingKeys.has(addon.key));
+      const mergedAddons = [...existingAddons, ...addonsToAdd];
+
+      // Update the token with merged addons
+      return await this.updateTokenFeatures(userId, { addons: mergedAddons });
+    } catch (error) {
+      console.error('Error adding addons to token:', error);
+      throw error;
+    }
+  }
 }
