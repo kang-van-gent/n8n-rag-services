@@ -18,41 +18,83 @@ interface BankOption {
   logo: React.ReactNode;
 }
 
-// Bank Logo Components with proper branding
+// Bank Logo Components with enhanced branding and visual appeal
 const BankLogos = {
   BBL: () => (
-    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-600 to-blue-800 flex items-center justify-center shadow-lg">
-      <div className="text-white font-bold text-lg">BBL</div>
+    <div className="relative w-12 h-12 rounded-xl bg-gradient-to-br from-blue-600 via-blue-700 to-blue-800 flex items-center justify-center shadow-lg ring-2 ring-blue-200 dark:ring-blue-800">
+      <div className="absolute inset-0 rounded-xl bg-gradient-to-br from-white/20 to-transparent"></div>
+      <div className="relative text-white font-bold text-xs tracking-wider drop-shadow-sm">
+        BBL
+      </div>
+      <div className="absolute -top-1 -right-1 w-3 h-3 bg-blue-400 rounded-full opacity-60"></div>
     </div>
   ),
 
   KBANK: () => (
-    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-green-600 to-green-800 flex items-center justify-center shadow-lg">
-      <div className="text-white font-bold text-sm">K</div>
+    <div className="relative w-12 h-12 rounded-xl bg-gradient-to-br from-green-500 via-green-600 to-green-800 flex items-center justify-center shadow-lg ring-2 ring-green-200 dark:ring-green-800">
+      <div className="absolute inset-0 rounded-xl bg-gradient-to-br from-white/20 to-transparent"></div>
+      <div className="relative w-7 h-7 rounded-lg bg-white/20 flex items-center justify-center">
+        <div className="text-white font-black text-lg drop-shadow-sm">K</div>
+      </div>
+      <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-400 rounded-full opacity-60"></div>
     </div>
   ),
 
   KTB: () => (
-    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center shadow-lg">
-      <div className="text-white font-bold text-sm">KTB</div>
+    <div className="relative w-12 h-12 rounded-xl bg-gradient-to-br from-sky-500 via-blue-600 to-blue-700 flex items-center justify-center shadow-lg ring-2 ring-sky-200 dark:ring-sky-800">
+      <div className="absolute inset-0 rounded-xl bg-gradient-to-br from-white/20 to-transparent"></div>
+      <div className="relative">
+        <div className="text-white font-bold text-xs tracking-wider drop-shadow-sm">
+          KTB
+        </div>
+        <div className="w-6 h-0.5 bg-white/60 rounded-full mx-auto mt-0.5"></div>
+      </div>
+      <div className="absolute -top-1 -right-1 w-3 h-3 bg-sky-400 rounded-full opacity-60"></div>
     </div>
   ),
 
   SCB: () => (
-    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-600 to-purple-800 flex items-center justify-center shadow-lg">
-      <div className="text-white font-bold text-sm">SCB</div>
+    <div className="relative w-12 h-12 rounded-xl bg-gradient-to-br from-purple-600 via-purple-700 to-purple-800 flex items-center justify-center shadow-lg ring-2 ring-purple-200 dark:ring-purple-800">
+      <div className="absolute inset-0 rounded-xl bg-gradient-to-br from-white/20 to-transparent"></div>
+      <div className="relative">
+        <div className="text-white font-bold text-xs tracking-wider drop-shadow-sm">
+          SCB
+        </div>
+        <div className="flex gap-0.5 justify-center mt-0.5">
+          <div className="w-1 h-1 bg-white/60 rounded-full"></div>
+          <div className="w-1 h-1 bg-white/60 rounded-full"></div>
+          <div className="w-1 h-1 bg-white/60 rounded-full"></div>
+        </div>
+      </div>
+      <div className="absolute -top-1 -right-1 w-3 h-3 bg-purple-400 rounded-full opacity-60"></div>
     </div>
   ),
 
   TMB: () => (
-    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-yellow-500 to-orange-600 flex items-center justify-center shadow-lg">
-      <div className="text-white font-bold text-sm">TMB</div>
+    <div className="relative w-12 h-12 rounded-xl bg-gradient-to-br from-orange-500 via-orange-600 to-red-600 flex items-center justify-center shadow-lg ring-2 ring-orange-200 dark:ring-orange-800">
+      <div className="absolute inset-0 rounded-xl bg-gradient-to-br from-white/20 to-transparent"></div>
+      <div className="relative">
+        <div className="text-white font-bold text-xs tracking-wider drop-shadow-sm">
+          TMB
+        </div>
+        <div className="w-4 h-0.5 bg-gradient-to-r from-yellow-300 to-orange-300 rounded-full mx-auto mt-0.5"></div>
+      </div>
+      <div className="absolute -top-1 -right-1 w-3 h-3 bg-orange-400 rounded-full opacity-60"></div>
     </div>
   ),
 
   BAY: () => (
-    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-yellow-400 to-yellow-600 flex items-center justify-center shadow-lg">
-      <div className="text-white font-bold text-sm">BAY</div>
+    <div className="relative w-12 h-12 rounded-xl bg-gradient-to-br from-amber-500 via-yellow-600 to-orange-600 flex items-center justify-center shadow-lg ring-2 ring-amber-200 dark:ring-amber-800">
+      <div className="absolute inset-0 rounded-xl bg-gradient-to-br from-white/20 to-transparent"></div>
+      <div className="relative">
+        <div className="text-white font-bold text-xs tracking-wider drop-shadow-sm">
+          BAY
+        </div>
+        <div className="flex justify-center mt-0.5">
+          <div className="w-2 h-2 bg-white/60 rounded-full"></div>
+        </div>
+      </div>
+      <div className="absolute -top-1 -right-1 w-3 h-3 bg-amber-400 rounded-full opacity-60"></div>
     </div>
   ),
 };

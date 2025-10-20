@@ -366,6 +366,7 @@
     "editProfile": "แก้ไขโปรไฟล์",
     "cancel": "ยกเลิก",
     "saveChanges": "บันทึกการเปลี่ยนแปลง",
+    "saving": "กำลังบันทึก...",
     "firstName": "ชื่อ",
     "lastName": "นามสกุล",
     "email": "อีเมล",

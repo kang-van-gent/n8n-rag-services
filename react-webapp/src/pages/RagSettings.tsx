@@ -954,119 +954,20 @@ export function RagSettings() {
             </div>
             <div className="flex items-center gap-2">
               <span className="px-3 py-1 bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300 rounded-full text-sm font-medium">
-                {getAvailableAddOns().length} {t("ragSettings.available")}
+                {t("ragSettings.comingSoon")}
               </span>
-              {itemCount > 0 && (
-                <button
-                  onClick={() => navigate("/cart")}
-                  className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-lg text-sm font-semibold transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105 border border-blue-500/20"
-                >
-                  <ShoppingCart className="w-4 h-4" />
-                  <span className="hidden sm:inline">
-                    {t("ragSettings.viewCart")}
-                  </span>
-                  <span className="bg-white/20 px-2 py-0.5 rounded-full text-xs font-bold ml-1">
-                    {itemCount}
-                  </span>
-                </button>
-              )}
             </div>
           </div>
 
-          {!featuresLoading ? (
-            getAvailableAddOns().length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {getAvailableAddOns().map((addon) => {
-                  const Icon = getFeatureIcon(addon);
-                  const isInCart = items.some(
-                    (item) => item.feature.key === addon.key
-                  );
-                  const pricing =
-                    TokenFeatureService.getAddOnPricing()[addon.key];
-
-                  return (
-                    <div
-                      key={addon.id}
-                      className="p-4 rounded-xl bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border border-gray-200/50 dark:border-gray-500/30 hover:shadow-lg hover:bg-white/90 dark:hover:bg-gray-800/90 shadow-sm shadow-gray-200/80 dark:shadow-none transition-all duration-200"
-                    >
-                      <div className="flex items-start gap-3 mb-3">
-                        <div className="p-2 rounded-lg bg-purple-100 dark:bg-purple-900/30">
-                          <Icon className="w-5 h-5 text-purple-600 dark:text-purple-400" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <h3 className="font-semibold text-gray-900 dark:text-gray-100 truncate">
-                            {addon.name}
-                          </h3>
-                          <div className="flex items-center gap-2 mt-1">
-                            <span className="px-2 py-1 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded text-xs font-medium">
-                              {addon.category}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-
-                      <p className="text-sm text-gray-600 dark:text-gray-300 line-clamp-2 mb-4">
-                        {addon.description || "No description available"}
-                      </p>
-
-                      <div className="flex items-center justify-between">
-                        <div className="flex flex-col">
-                          <div className="text-lg font-bold text-purple-600 dark:text-purple-400">
-                            ฿{pricing ? parseInt(pricing.price) : "N/A"}
-                          </div>
-                          <div className="text-xs text-gray-500">
-                            per {pricing?.period || "month"}
-                          </div>
-                        </div>
-
-                        <button
-                          onClick={() => handleAddToCart(addon)}
-                          disabled={isInCart}
-                          className={cn(
-                            "flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors text-sm",
-                            isInCart
-                              ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300 cursor-not-allowed"
-                              : "bg-purple-600 hover:bg-purple-700 text-white"
-                          )}
-                        >
-                          {isInCart ? (
-                            <>
-                              <CheckCircle className="w-4 h-4" />
-                              In Cart
-                            </>
-                          ) : (
-                            <>
-                              <Plus className="w-4 h-4" />
-                              Add to Cart
-                            </>
-                          )}
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <div className="text-center py-8">
-                <Package className="w-12 h-12 text-gray-400 mx-auto mb-3" />
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
-                  {t("ragSettings.noAddonsAvailable")}
-                </h3>
-                <p className="text-gray-600 dark:text-gray-300">
-                  {token
-                    ? t("ragSettings.allAddonsIncluded")
-                    : t("ragSettings.activatePlanForAddons")}
-                </p>
-              </div>
-            )
-          ) : (
-            <div className="flex items-center justify-center py-8">
-              <div className="animate-spin w-6 h-6 border-2 border-gray-300 border-t-gray-600 rounded-full"></div>
-              <span className="ml-2 text-gray-600 dark:text-gray-300">
-                {t("ragSettings.loadingAddons")}
-              </span>
-            </div>
-          )}
+          <div className="text-center py-12">
+            <Package className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+            <h3 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-2">
+              {t("ragSettings.comingSoon")}
+            </h3>
+            <p className="text-gray-600 dark:text-gray-300 max-w-md mx-auto">
+              {t("ragSettings.addonsComingSoonDescription")}
+            </p>
+          </div>
         </div>
       </div>
 

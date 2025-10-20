@@ -369,6 +369,7 @@
     "editProfile": "Edit Profile",
     "cancel": "Cancel",
     "saveChanges": "Save Changes",
+    "saving": "Saving...",
     "firstName": "First Name",
     "lastName": "Last Name",
     "email": "Email",

@@ -39,6 +39,7 @@ import {
 import { PaymentService, PaymentOrder } from "../services/paymentService";
 import { OmisePaymentService } from "../services/OmisePaymentService";
 import { OrderService } from "../services/orderService";
+import { UserService } from "../services/UserService";
 import BillingManagement from "../components/BillingManagement";
 import { AlertModal } from "../components/Modal";
 import { PaymentMethodSelection } from "../components/PaymentMethodSelection";
@@ -172,6 +173,7 @@ export function Users() {
   const { token, loading: tokenLoading, refreshToken } = useToken();
   const { items, itemCount } = useCart();
   const [isEditing, setIsEditing] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [userProfile, setUserProfile] = useState({
     firstName: "",
     lastName: "",
@@ -669,9 +671,80 @@ export function Users() {
   };
 
   const handleSaveProfile = async () => {
-    // Here you would typically call an API to update the user profile
-    setIsEditing(false);
-    // You can add actual API call here when backend is ready
+    if (!user?.id) {
+      showAlertModal("Error", "User not found. Please log in again.", "error");
+      return;
+    }
+
+    // Basic validation
+    if (!userProfile.firstName.trim()) {
+      showAlertModal("Validation Error", "First name is required.", "error");
+      return;
+    }
+
+    if (!userProfile.lastName.trim()) {
+      showAlertModal("Validation Error", "Last name is required.", "error");
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      // Update user metadata in Supabase Auth
+      const { error: authError } = await supabase.auth.updateUser({
+        data: {
+          first_name: userProfile.firstName.trim(),
+          last_name: userProfile.lastName.trim(),
+          phone: userProfile.phone.trim(),
+        },
+      });
+
+      if (authError) {
+        throw authError;
+      }
+
+      // Try to update user profile in profiles table
+      try {
+        const profileUpdates = {
+          name: `${userProfile.firstName.trim()} ${userProfile.lastName.trim()}`.trim(),
+          phone: userProfile.phone.trim(),
+        };
+
+        await UserService.updateUserProfile(user.id, profileUpdates);
+      } catch (profileError) {
+        // Profile table update failed, but auth metadata was updated
+        // This is acceptable as the profile table might not exist yet
+        console.warn("Profile table update failed:", profileError);
+      }
+
+      // Refresh the session to get updated user metadata
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (session?.user) {
+        // The auth context will automatically update from the onAuthStateChange listener
+        // but we can also update our local state for immediate feedback
+        setUserProfile({
+          firstName: session.user.user_metadata?.first_name || "",
+          lastName: session.user.user_metadata?.last_name || "",
+          email: session.user.email || "",
+          phone: session.user.user_metadata?.phone || "",
+        });
+      }
+
+      showAlertModal("Success", "Profile updated successfully!", "success");
+
+      setIsEditing(false);
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error occurred";
+      showAlertModal(
+        "Update Failed",
+        `Failed to update profile: ${errorMessage}`,
+        "error"
+      );
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const getAvailableUpgradePlans = () => {
@@ -1676,10 +1749,20 @@ Generated on: ${new Date().toLocaleString()}
                 </button>
                 <button
                   onClick={handleSaveProfile}
-                  className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-medium transition-colors"
+                  disabled={isSaving}
+                  className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-colors"
                 >
-                  <Save className="w-4 h-4" />
-                  {t("users.saveChanges")}
+                  {isSaving ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                      {t("users.saving")}
+                    </>
+                  ) : (
+                    <>
+                      <Save className="w-4 h-4" />
+                      {t("users.saveChanges")}
+                    </>
+                  )}
                 </button>
               </div>
             )}

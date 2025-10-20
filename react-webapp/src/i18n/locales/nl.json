@@ -360,6 +360,7 @@
     "editProfile": "Profiel Bewerken",
     "cancel": "Annuleren",
     "saveChanges": "Wijzigingen Opslaan",
+    "saving": "Opslaan...",
     "firstName": "Voornaam",
     "lastName": "Achternaam",
     "email": "E-mail",
