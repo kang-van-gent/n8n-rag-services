@@ -455,11 +455,31 @@ app.get('/api/payment-return', async (req, res) => {
 
     console.log('📊 Final determined payment status:', paymentStatus);
 
-    // Add charge ID to redirect if available
-    let redirectUrl = `http://localhost:3000/users?payment=${paymentStatus}`;
-    if (chargeId) {
-        redirectUrl += `&charge_id=${chargeId}`;
-    }
+    // Determine base redirect target (default to Users page if not provided)
+    const baseRedirect = req.query.redirect || 'http://localhost:3000/users';
+
+    // Safely append query params to the base redirect URL
+    const appendParams = (urlStr, params) => {
+        try {
+            const u = new URL(urlStr);
+            Object.entries(params).forEach(([k, v]) => {
+                if (v !== undefined && v !== null) u.searchParams.set(k, String(v));
+            });
+            return u.toString();
+        } catch (e) {
+            const sep = urlStr.includes('?') ? '&' : '?';
+            const query = Object.entries(params)
+                .filter(([, v]) => v !== undefined && v !== null)
+                .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`)
+                .join('&');
+            return `${urlStr}${sep}${query}`;
+        }
+    };
+
+    const redirectUrl = appendParams(baseRedirect, {
+        payment: paymentStatus,
+        ...(chargeId ? { charge_id: chargeId } : {})
+    });
 
     console.log('🔀 Redirecting to:', redirectUrl);
     res.redirect(redirectUrl);
@@ -468,8 +488,28 @@ app.get('/api/payment-failure', (req, res) => {
     console.log('❌ Payment failure URL hit:', req.query);
     console.log('Full URL:', req.url);
 
+    // Determine base redirect target (default to Users page if not provided)
+    const baseRedirect = req.query.redirect || 'http://localhost:3000/users';
+
+    const appendParams = (urlStr, params) => {
+        try {
+            const u = new URL(urlStr);
+            Object.entries(params).forEach(([k, v]) => {
+                if (v !== undefined && v !== null) u.searchParams.set(k, String(v));
+            });
+            return u.toString();
+        } catch (e) {
+            const sep = urlStr.includes('?') ? '&' : '?';
+            const query = Object.entries(params)
+                .filter(([, v]) => v !== undefined && v !== null)
+                .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`)
+                .join('&');
+            return `${urlStr}${sep}${query}`;
+        }
+    };
+
     // Always redirect with failed status for failure endpoint
-    const redirectUrl = `http://localhost:3000/users?payment=failed`;
+    const redirectUrl = appendParams(baseRedirect, { payment: 'failed' });
 
     console.log('🔀 Redirecting to:', redirectUrl);
     res.redirect(redirectUrl);

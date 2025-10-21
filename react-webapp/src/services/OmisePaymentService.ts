@@ -476,7 +476,8 @@ export class OmisePaymentService {
     currency: string,
     description: string,
     paymentMethodId: string,
-    isSubscriptionPayment: boolean = false
+    isSubscriptionPayment: boolean = false,
+    options?: { returnUri?: string; failureUri?: string; orderType?: string; items?: any[] }
   ): Promise<{ success: boolean; orderId?: string; chargeId?: string; redirectUrl?: string; error?: string }> {
     try {
       // Get the payment method
@@ -494,7 +495,7 @@ export class OmisePaymentService {
       // Check if this is an internet banking method (saved bank preference)
       const isInternetBanking = paymentMethod.expiry_month === 0 && paymentMethod.last_four_digits === 'BANK';
       
-      if (isInternetBanking) {
+  if (isInternetBanking) {
         // For saved internet banking methods, redirect to create a new internet banking payment
         console.log('Processing saved internet banking method:', paymentMethod);
         
@@ -504,10 +505,14 @@ export class OmisePaymentService {
           return { success: false, error: 'Invalid bank information' };
         }
 
-        // Use the internet banking payment flow instead of trying to charge the fake token
-        const proxyUrl = process.env.REACT_APP_OMISE_PROXY_URL || 'http://localhost:3001';
-        const returnUri = `${proxyUrl}/api/payment-return`;
-        const failureUri = `${proxyUrl}/api/payment-failure`;
+  // Use the internet banking payment flow; prefer proxy endpoints so server can determine success/failed
+  const appBase = typeof window !== 'undefined' ? window.location.origin : '';
+  const currentPath = typeof window !== 'undefined' ? window.location.pathname : '';
+  const proxyUrl = process.env.REACT_APP_OMISE_PROXY_URL || 'http://localhost:3001';
+  const defaultReturn = `${proxyUrl}/api/payment-return?redirect=${encodeURIComponent(`${appBase}${currentPath}`)}`;
+  const defaultFailure = `${proxyUrl}/api/payment-failure?redirect=${encodeURIComponent(`${appBase}${currentPath}`)}`;
+        const returnUri = options?.returnUri || defaultReturn;
+        const failureUri = options?.failureUri || defaultFailure;
 
         return await this.processInternetBankingPayment(
           userId,
@@ -518,7 +523,8 @@ export class OmisePaymentService {
           returnUri,
           failureUri,
           undefined, // items
-          isSubscriptionPayment // pass the subscription payment flag
+          isSubscriptionPayment, // pass the subscription payment flag
+          options?.orderType
         );
       }
 
@@ -529,16 +535,31 @@ export class OmisePaymentService {
         return { success: false, error: 'Omise SDK not available' };
       }
 
-      let order = null;
+  let order = null;
       
       // Only create payment order for non-subscription payments
       if (!isSubscriptionPayment) {
         // Create initial payment order record with pending status
+        // Use provided items (e.g., from Cart) so we store feature names pre-payment
+        const orderItems = options?.items && Array.isArray(options.items) && options.items.length > 0
+          ? options.items
+          : [{
+              id: `card_${Date.now()}`,
+              feature: {
+                key: 'credit_card_payment',
+                name: description || 'Cart purchase',
+                description: description || 'Cart purchase',
+                category: 'payment',
+              },
+              price: amount,
+              period: 'one_time',
+              quantity: 1,
+            }];
         const { data: orderData, error: orderError } = await supabase
           .from('payment_orders')
           .insert({
             user_id: userId,
-            items: [{ type: 'credit_card', description: description || 'Cart purchase', amount: amount }],
+            items: orderItems,
             total_amount: amount,
             currency: currency,
             description: description || 'Cart purchase',
@@ -696,7 +717,8 @@ export class OmisePaymentService {
     returnUri: string,
     failureUri: string,
     items?: any[],
-    isSubscriptionPayment: boolean = false
+    isSubscriptionPayment: boolean = false,
+    orderType?: string
   ): Promise<{ success: boolean; orderId?: string; chargeId?: string; redirectUrl?: string; error?: string }> {
     try {
       // Initialize Omise if needed
@@ -711,11 +733,15 @@ export class OmisePaymentService {
         const orderItems = items && Array.isArray(items) && items.length > 0 
           ? items 
           : [{ 
-              type: 'internet_banking', 
-              description: description || 'Cart purchase', 
-              amount: amount,
               id: `ib_${Date.now()}`,
-              name: 'Internet Banking Payment',
+              feature: {
+                key: 'internet_banking_payment',
+                name: description || 'Internet Banking Payment',
+                description: description || 'Cart purchase',
+                category: 'payment',
+              },
+              price: amount,
+              period: 'one_time',
               quantity: 1
             }];
 
@@ -826,6 +852,7 @@ export class OmisePaymentService {
             ...(order ? { order_id: order.id } : {}),
             user_id: userId,
             is_subscription_payment: isSubscriptionPayment,
+            ...(orderType ? { order_type: orderType } : {}),
           },
         }),
       });
@@ -933,7 +960,9 @@ export class OmisePaymentService {
 
         // Create internet banking source using our existing method
         // (this method will create the payment order with proper items)
-        // Use proxy server URLs for consistent status detection (same as saved methods)
+        // Redirect via proxy so server determines success/failed, but return back to current page
+        const appBase = typeof window !== 'undefined' ? window.location.origin : '';
+        const currentPath = typeof window !== 'undefined' ? window.location.pathname : '';
         const proxyUrl = process.env.REACT_APP_OMISE_PROXY_URL || 'http://localhost:3001';
         const result = await this.processInternetBankingPayment(
           userId,
@@ -941,9 +970,11 @@ export class OmisePaymentService {
           currency,
           description,
           selectedBank,
-          `${proxyUrl}/api/payment-return`,
-          `${proxyUrl}/api/payment-failure`,
-          items
+          `${proxyUrl}/api/payment-return?redirect=${encodeURIComponent(`${appBase}${currentPath}`)}`,
+          `${proxyUrl}/api/payment-failure?redirect=${encodeURIComponent(`${appBase}${currentPath}`)}`,
+          items,
+          false,
+          'cart_addons'
         );
 
         resolve(result);

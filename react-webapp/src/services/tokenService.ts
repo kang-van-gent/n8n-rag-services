@@ -130,17 +130,30 @@ export class TokenService {
         throw fetchError;
       }
 
-      // Check if token is already assigned to another user
-      if (existingToken.user_id && existingToken.user_id !== userId) {
-        throw new Error('Token already in use by another user');
+      // Normalize user_id (treat empty string or undefined as null)
+      const assignedUserId = existingToken.user_id || null;
+
+      // Enforce activation rules explicitly:
+      // 1) Available: status=inactive AND user_id is null => allow
+      // 2) Unavailable (used): status=inactive AND user_id not null => block
+      // 3) Unavailable (in use): status=active AND user_id not null => block
+
+      if (existingToken.status === 'inactive') {
+        if (!assignedUserId) {
+          // Available - proceed to activate for this user
+        } else {
+          // Used previously, not assignable again
+          throw new Error('This token has already been used and is unavailable.');
+        }
+      } else if (existingToken.status === 'active') {
+        if (assignedUserId === userId) {
+          throw new Error('Token is already active for your account');
+        } else {
+          throw new Error('This token is currently in use by another user.');
+        }
       }
 
-      // Check if token is already active for this user
-      if (existingToken.user_id === userId && existingToken.status === 'active') {
-        throw new Error('Token is already active for your account');
-      }
-
-      // Activate the token for this user
+      // Activate the token for this user (only path that reaches here is available token)
       const { data, error } = await supabase
         .from('tokens')
         .update({ 

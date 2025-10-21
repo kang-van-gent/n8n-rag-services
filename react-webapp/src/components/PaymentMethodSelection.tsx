@@ -22,6 +22,7 @@ interface NewPaymentFormProps {
   description: string;
   preferredType?: "card" | "internet_banking";
   isSubscriptionPayment?: boolean;
+  orderType?: string;
   onPaymentSuccess: (result: {
     success: boolean;
     chargeId?: string;
@@ -41,6 +42,7 @@ const NewPaymentForm: React.FC<NewPaymentFormProps> = ({
   description,
   preferredType,
   isSubscriptionPayment = false,
+  orderType,
   onPaymentSuccess,
   onPaymentError,
   processing,
@@ -59,11 +61,19 @@ const NewPaymentForm: React.FC<NewPaymentFormProps> = ({
 
     setProcessing(true);
     try {
-      // Use proxy server URLs for consistent status detection (same as saved methods)
+      const appBase =
+        typeof window !== "undefined" ? window.location.origin : "";
+      const currentPath =
+        typeof window !== "undefined" ? window.location.pathname : "";
       const proxyUrl =
         process.env.REACT_APP_OMISE_PROXY_URL || "http://localhost:3001";
-      const returnUri = `${proxyUrl}/api/payment-return`;
-      const failureUri = `${proxyUrl}/api/payment-failure`;
+      // Redirect via proxy so server can verify charge status (success/failed) and then redirect back to this page
+      const returnUri = `${proxyUrl}/api/payment-return?redirect=${encodeURIComponent(
+        `${appBase}${currentPath}`
+      )}`;
+      const failureUri = `${proxyUrl}/api/payment-failure?redirect=${encodeURIComponent(
+        `${appBase}${currentPath}`
+      )}`;
 
       const result = await OmisePaymentService.processInternetBankingPayment(
         userId,
@@ -74,7 +84,8 @@ const NewPaymentForm: React.FC<NewPaymentFormProps> = ({
         returnUri,
         failureUri,
         undefined, // items
-        isSubscriptionPayment
+        isSubscriptionPayment,
+        orderType
       );
 
       onPaymentSuccess(result);
@@ -255,13 +266,35 @@ export const PaymentMethodSelection: React.FC<PaymentMethodSelectionProps> = ({
 
     setProcessing(true);
     try {
+      // Determine order type for subscription payments (renew vs upgrade)
+      const computedOrderType = isSubscriptionPayment
+        ? subscriptionContext?.isUpgrade || subscriptionContext?.targetPlan
+          ? "upgrade_plan"
+          : "renew_subscription"
+        : "users_payment";
+
+      // Build proxy return/failure URIs so server determines success/failed then redirects back to this page
+      const appBase =
+        typeof window !== "undefined" ? window.location.origin : "";
+      const currentPath =
+        typeof window !== "undefined" ? window.location.pathname : "";
+      const proxyUrl =
+        process.env.REACT_APP_OMISE_PROXY_URL || "http://localhost:3001";
+      const returnUri = `${proxyUrl}/api/payment-return?redirect=${encodeURIComponent(
+        `${appBase}${currentPath}`
+      )}`;
+      const failureUri = `${proxyUrl}/api/payment-failure?redirect=${encodeURIComponent(
+        `${appBase}${currentPath}`
+      )}`;
+
       const result = await OmisePaymentService.processPayment(
         userId,
         amount,
         currency,
         description,
         selectedPaymentMethod,
-        isSubscriptionPayment
+        isSubscriptionPayment,
+        { returnUri, failureUri, orderType: computedOrderType }
       );
 
       // If there's a redirect URL (saved internet banking method), store payment data
@@ -393,6 +426,14 @@ export const PaymentMethodSelection: React.FC<PaymentMethodSelectionProps> = ({
               description={description}
               preferredType={preferredPaymentType || undefined}
               isSubscriptionPayment={isSubscriptionPayment}
+              orderType={
+                isSubscriptionPayment
+                  ? subscriptionContext?.isUpgrade ||
+                    subscriptionContext?.targetPlan
+                    ? "upgrade_plan"
+                    : "renew_subscription"
+                  : "users_payment"
+              }
               onPaymentSuccess={handleNewPaymentSuccess}
               onPaymentError={(error: string) =>
                 onPaymentComplete({ success: false, error })

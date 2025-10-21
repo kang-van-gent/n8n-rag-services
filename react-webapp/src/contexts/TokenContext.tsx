@@ -74,7 +74,7 @@ export function TokenProvider({ children }: TokenProviderProps) {
       setLoading(true);
       const newToken = await TokenService.createToken(user.id, tokenData);
       setToken(newToken);
-      success("Token activated!", "Your token has been successfully activated");
+      success("Token created", "Complete checkout to activate your token");
     } catch (err) {
       console.error("Error creating token:", err);
       error("Failed to create token", "Please try again");

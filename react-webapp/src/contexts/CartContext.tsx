@@ -7,11 +7,14 @@ import React, {
 } from "react";
 import { Feature } from "../services/featureService";
 import { TokenFeatureService } from "../services/TokenFeatureService";
+import type { Plan } from "../services/pricingService";
 import { TokenService } from "../services/tokenService";
 import { useAuth } from "./AuthContext";
 import { useToken } from "./TokenContext";
 import { OmisePaymentService, OmisePaymentMethod } from "../services";
 import { supabase } from "../lib/supabase";
+import { composeToken as composeN8nToken } from "../utils/tokenGenerator";
+import { SubscriptionService } from "../services/subscriptionService";
 
 export interface CartItem {
   id: string;
@@ -52,6 +55,7 @@ interface CartContextType {
   selectedPaymentMethod: PaymentMethod | null;
   isLoadingPaymentMethods: boolean;
   addItem: (feature: Feature, quantity?: number) => void;
+  addPlanToCart: (plan: Plan) => void;
   removeItem: (itemId: string) => void;
   updateQuantity: (itemId: string, quantity: number) => void;
   clearCart: () => void;
@@ -194,6 +198,45 @@ export function CartProvider({ children }: CartProviderProps) {
     }
   };
 
+  // Add a subscription plan as a cart item
+  const addPlanToCart = (plan: Plan) => {
+    const key = `plan_${(plan.key || "").toLowerCase()}`;
+
+    // Prevent duplicates
+    const exists = items.some((it) => it.feature.key === key);
+    if (exists) {
+      console.log(`${plan.name} is already in the cart`);
+      return;
+    }
+
+    const featureLike: Feature = {
+      id: key,
+      key,
+      name: plan.name,
+      description: plan.description || null,
+      category: "plan",
+      unit: "plan",
+      is_metered: false,
+      default_limit: null,
+      is_deprecated: false,
+      created_at: new Date().toISOString(),
+    };
+
+    const priceNum = plan.price ? parseFloat(plan.price) : 0;
+    const cycle = (plan.billing_cycle || "monthly").toLowerCase();
+    const period = cycle === "yearly" ? "year" : "month";
+
+    const newItem: CartItem = {
+      id: `${key}_${Date.now()}`,
+      feature: featureLike,
+      price: priceNum,
+      period,
+      quantity: 1,
+    };
+
+    setItems((prev) => [...prev, newItem]);
+  };
+
   const removeItem = (itemId: string) => {
     setItems((prev) => prev.filter((item) => item.id !== itemId));
   };
@@ -278,6 +321,13 @@ export function CartProvider({ children }: CartProviderProps) {
       const tax = subtotal * 0.07; // 7% tax
       const total = subtotal + tax;
 
+      // Determine order type and subscription context
+      const hasPlanItem = items.some(
+        (it) =>
+          it.feature.category === "plan" || it.feature.key.startsWith("plan_")
+      );
+      const orderType = hasPlanItem ? "cart_token" : "cart_addons";
+
       // Process payment with Omise
       let paymentResult: {
         success: boolean;
@@ -289,15 +339,26 @@ export function CartProvider({ children }: CartProviderProps) {
 
       if (selectedPaymentMethod.type === "internet_banking") {
         // For internet banking, create a charge with source
+        const appBase =
+          typeof window !== "undefined" ? window.location.origin : "";
+        const currentPath = "/cart";
+        const proxyUrl =
+          process.env.REACT_APP_OMISE_PROXY_URL || "http://localhost:3001";
         paymentResult = await OmisePaymentService.processInternetBankingPayment(
           user.id,
           total,
           "THB",
           `Purchase of ${items.length} add-on(s)`,
           selectedPaymentMethod.details.bankCode || "",
-          `${window.location.origin}/cart?payment=success`,
-          `${window.location.origin}/cart?payment=failed`,
-          items // Pass cart items to create proper order
+          `${proxyUrl}/api/payment-return?redirect=${encodeURIComponent(
+            `${appBase}${currentPath}`
+          )}`,
+          `${proxyUrl}/api/payment-failure?redirect=${encodeURIComponent(
+            `${appBase}${currentPath}`
+          )}`,
+          items, // Pass cart items to create proper order
+          hasPlanItem, // Only treat as subscription when purchasing a plan
+          orderType
         );
       } else {
         // For credit cards, use existing flow
@@ -306,7 +367,9 @@ export function CartProvider({ children }: CartProviderProps) {
           total,
           "THB",
           `Purchase of ${items.length} add-on(s)`,
-          selectedPaymentMethod.id
+          selectedPaymentMethod.id,
+          hasPlanItem, // subscription when plan, not when add-ons only
+          { orderType, items }
         );
       }
 
@@ -327,29 +390,84 @@ export function CartProvider({ children }: CartProviderProps) {
           chargeId: paymentResult.chargeId,
           redirectUrl: paymentResult.redirectUrl,
         };
-      } // Update the order record with cart items
-      if (paymentResult.orderId) {
-        const { error: updateError } = await supabase
-          .from("payment_orders")
-          .update({ items: items })
-          .eq("id", paymentResult.orderId);
-
-        if (updateError) {
-          console.error("Failed to update order with items:", updateError);
-        }
       }
 
-      // Add purchased add-ons to user's token
+      // Create token from purchased plan (if any), then add add-ons
       try {
-        await TokenService.addAddonsToToken(user.id, items);
-        console.log("✅ Add-ons added to user token:", items);
+        // Separate plan item and add-on items
+        const planItem = items.find(
+          (it) =>
+            it.feature.category === "plan" || it.feature.key.startsWith("plan_")
+        );
+        const addOnItems = items.filter(
+          (it) =>
+            !(
+              it.feature.category === "plan" ||
+              it.feature.key.startsWith("plan_")
+            )
+        );
 
-        // Refresh token context to show new add-ons immediately
+        if (planItem) {
+          // Check existing active token to avoid duplicates
+          const existing = await TokenService.getUserToken(user.id);
+          if (!existing) {
+            const planKey = planItem.feature.key.replace(/^plan_/, "");
+            const type = planItem.period === "year" ? "yearly" : "monthly";
+            const draft = composeN8nToken(planKey, type);
+            await TokenService.createToken(user.id, {
+              token: draft.token,
+              package: draft.package,
+              type: draft.type,
+              features: draft.features,
+              addons: draft.addons,
+              expiredAt: draft.expiredAt,
+            });
+
+            // Create subscription record instead of order
+            await SubscriptionService.createSubscription({
+              user_id: user.id,
+              plan_name: planItem.feature.name,
+              plan_type: planKey as any,
+              status: "active",
+              amount: planItem.price * planItem.quantity,
+              currency: "THB",
+              billing_cycle: type as any,
+              started_at: new Date().toISOString(),
+              expires_at: draft.expiredAt,
+              cancelled_at: null,
+              payment_method: selectedPaymentMethod?.type || null,
+              transaction_id: (paymentResult.orderId ||
+                paymentResult.chargeId ||
+                null) as any,
+            });
+          }
+        }
+
+        if (addOnItems.length > 0) {
+          // For add-ons purchased alone via credit card, payment order is already completed by service
+          // For internet banking, mark order as completed now (service set it to processing)
+          if (!planItem && paymentResult.orderId) {
+            try {
+              await supabase
+                .from("payment_orders")
+                .update({
+                  status: "completed",
+                  completed_at: new Date().toISOString(),
+                })
+                .eq("id", paymentResult.orderId);
+            } catch (e) {
+              console.error("Failed to update payment order to completed:", e);
+            }
+          }
+          await TokenService.addAddonsToToken(user.id, addOnItems);
+          console.log("✅ Add-ons added to user token:", addOnItems);
+        }
+
+        // Refresh token context to reflect new token/addons
         await refreshToken();
-        console.log("✅ Token refreshed with new add-ons");
       } catch (error) {
-        console.error("Failed to add add-ons to token:", error);
-        // Don't fail the entire checkout if token update fails
+        console.error("Post-payment token creation/add-ons failed:", error);
+        // Do not fail the overall checkout return
       }
 
       // Clear cart on successful checkout
@@ -382,6 +500,7 @@ export function CartProvider({ children }: CartProviderProps) {
     selectedPaymentMethod,
     isLoadingPaymentMethods,
     addItem,
+    addPlanToCart,
     removeItem,
     updateQuantity,
     clearCart,

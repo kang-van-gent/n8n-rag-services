@@ -23,9 +23,11 @@ import { useAuth } from "../contexts/AuthContext";
 import { useToken } from "../contexts/TokenContext";
 import { OmisePaymentService } from "../services/OmisePaymentService";
 import { TokenService } from "../services/tokenService";
+import { composeToken as composeN8nToken } from "../utils/tokenGenerator";
 import OmisePaymentForm from "../components/OmisePaymentForm";
 import { cn } from "../utils/cn";
 import { supabase } from "../lib/supabase";
+import { SubscriptionService } from "../services/subscriptionService";
 
 export function Cart() {
   const { t } = useTranslation();
@@ -68,42 +70,97 @@ export function Cart() {
 
         // Add purchased add-ons to user's token and update payment order status
         if (user && checkoutData.items) {
-          Promise.all([
-            // Add add-ons to token
-            TokenService.addAddonsToToken(user.id, checkoutData.items),
-            // Update payment order status to completed
-            checkoutData.orderId
-              ? supabase
-                  .from("payment_orders")
-                  .update({
-                    status: "completed",
-                    completed_at: new Date().toISOString(),
-                  })
-                  .eq("id", checkoutData.orderId)
-              : Promise.resolve(),
-          ])
-            .then(() => {
-              console.log(
-                "✅ Add-ons added to user token and payment order updated after internet banking payment:",
-                checkoutData.items
+          (async () => {
+            try {
+              // Split plan vs add-ons
+              const planItem = checkoutData.items.find(
+                (it: any) =>
+                  it.feature?.category === "plan" ||
+                  it.feature?.key?.startsWith("plan_")
               );
-              // Refresh token context to show new add-ons immediately
-              if (refreshToken) {
-                refreshToken();
+              const addOnItems = checkoutData.items.filter(
+                (it: any) =>
+                  !(
+                    it.feature?.category === "plan" ||
+                    it.feature?.key?.startsWith("plan_")
+                  )
+              );
+
+              // Create token if plan was purchased and no active token exists
+              const existing = await TokenService.getUserToken(user.id);
+              if (!existing && planItem) {
+                const planKey = planItem.feature.key.replace(/^plan_/, "");
+                const type = planItem.period === "year" ? "yearly" : "monthly";
+                const draft = composeN8nToken(planKey, type);
+                await TokenService.createToken(user.id, {
+                  token: draft.token,
+                  package: draft.package,
+                  type: draft.type,
+                  features: draft.features,
+                  addons: draft.addons,
+                  expiredAt: draft.expiredAt,
+                });
               }
-            })
-            .catch((error) => {
+
+              // Add-ons
+              if (addOnItems.length > 0) {
+                // If this was an add-ons only purchase via Internet Banking, mark the payment order as completed
+                if (!planItem && checkoutData.orderId) {
+                  try {
+                    await supabase
+                      .from("payment_orders")
+                      .update({
+                        status: "completed",
+                        completed_at: new Date().toISOString(),
+                      })
+                      .eq("id", checkoutData.orderId);
+                  } catch (e) {
+                    console.error(
+                      "Failed to update payment order to completed (Cart return):",
+                      e
+                    );
+                  }
+                }
+                await TokenService.addAddonsToToken(user.id, addOnItems);
+              }
+
+              // Create subscription record instead of order status update
+              if (planItem) {
+                const planKey = planItem.feature.key.replace(/^plan_/, "");
+                const type = planItem.period === "year" ? "yearly" : "monthly";
+                const draft = composeN8nToken(planKey, type);
+                await SubscriptionService.createSubscription({
+                  user_id: user.id,
+                  plan_name: planItem.feature.name,
+                  plan_type: planKey as any,
+                  status: "active",
+                  amount: planItem.price * planItem.quantity,
+                  currency: "THB",
+                  billing_cycle: type as any,
+                  started_at: new Date().toISOString(),
+                  expires_at: draft.expiredAt,
+                  cancelled_at: null,
+                  payment_method: "internet_banking",
+                  transaction_id:
+                    checkoutData.orderId || checkoutData.chargeId || null,
+                });
+              }
+
+              // Refresh token context
+              if (refreshToken) await refreshToken();
+            } catch (error) {
               console.error(
-                "Failed to add add-ons to token or update payment order after payment:",
+                "Post-payment token creation/add-ons failed:",
                 error
               );
-            });
+            }
+          })();
         }
 
         // Clear cart and show success
         clearCart();
         setCheckoutSuccess(true);
-        setOrderId(checkoutData.orderId);
+        setOrderId(checkoutData.orderId || checkoutData.chargeId || null);
       }
 
       // Clean up URL

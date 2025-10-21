@@ -2403,6 +2403,15 @@ export function Users() {
     // Ensure order.items is an array
     const orderItems = Array.isArray(order.items) ? order.items : [];
 
+    const formatFeatureTitle = (key?: string) => {
+      if (!key) return "Unknown Feature";
+      return String(key)
+        .replace(/^plan_/, "")
+        .replace(/[_-]+/g, " ")
+        .trim()
+        .replace(/\b\w/g, (c) => c.toUpperCase());
+    };
+
     const receiptData = {
       orderId: order.id,
       purchaseDate: formatDate(order.created_at),
@@ -2413,8 +2422,8 @@ export function Users() {
         name:
           `${userProfile.firstName} ${userProfile.lastName}`.trim() || "N/A",
       },
-      items: orderItems.map((item) => ({
-        name: item.feature?.name || "Unknown Item",
+      items: orderItems.map((item: any) => ({
+        name: item.feature?.name || formatFeatureTitle(item.feature?.key),
         description: item.feature?.description || "",
         category: item.feature?.category || "",
         price: item.price || 0,
@@ -2529,6 +2538,16 @@ Generated on: ${new Date().toLocaleString()}
       });
     });
 
+    // Helper to format a feature key into a readable title
+    const formatFeatureTitle = (key?: string) => {
+      if (!key) return "Unknown Feature";
+      return String(key)
+        .replace(/^plan_/, "")
+        .replace(/[_-]+/g, " ")
+        .trim()
+        .replace(/\b\w/g, (c) => c.toUpperCase());
+    };
+
     // Add payment orders (Purple box - Add-on Purchase)
     paymentOrders
       .filter((order) => order.status === "completed")
@@ -2542,13 +2561,15 @@ Generated on: ${new Date().toLocaleString()}
             orderItems.length > 1 ? "s" : ""
           })`,
           orderNumber: order.id.slice(0, 8),
-          items: orderItems.map((item) => ({
-            name: item.feature?.name || "Unknown Item",
-            description: item.feature?.description || "",
-            category: item.feature?.category || "agent",
-            price: item.price || 0,
-            quantity: item.quantity || 1,
-          })),
+          items: orderItems.map((item: any) => {
+            const feature = item?.feature || {};
+            const name = feature.name || formatFeatureTitle(feature.key);
+            const description = feature.description || "";
+            const category = feature.category || "agent";
+            const price = item?.price || 0;
+            const quantity = item?.quantity || 1;
+            return { name, description, category, price, quantity };
+          }),
           total: order.total_amount,
           currency: order.currency,
           status: "completed",
