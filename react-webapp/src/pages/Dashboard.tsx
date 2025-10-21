@@ -116,7 +116,11 @@ export function Dashboard() {
           </div>
 
           {/* Token Activation Component */}
-          <ActivateToken />
+          <div className="flex justify-center">
+            <div className="w-full max-w-5xl">
+              <ActivateToken />
+            </div>
+          </div>
         </div>
       </Layout>
     );

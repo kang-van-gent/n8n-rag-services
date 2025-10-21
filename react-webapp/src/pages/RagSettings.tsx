@@ -44,64 +44,6 @@ import { useCart } from "../contexts/CartContext";
 import { cn } from "../utils/cn";
 import HowToModal from "../components/HowToModal";
 
-// Helper function to get available add-ons
-const getAvailableAddons = (t: any) => [
-  {
-    id: "advanced_analytics",
-    name: t("addons.advancedAnalytics"),
-    description: t("addons.advancedAnalyticsDesc"),
-    price: "$9.99/month",
-    enabled: false,
-    icon: BarChart3,
-    category: "Analytics",
-  },
-  {
-    id: "multi_language",
-    name: t("addons.multiLanguage"),
-    description: t("addons.multiLanguageDesc"),
-    price: "$14.99/month",
-    enabled: true,
-    icon: Globe,
-    category: "Language",
-  },
-  {
-    id: "advanced_security",
-    name: t("addons.advancedSecurity"),
-    description: t("addons.advancedSecurityDesc"),
-    price: "$19.99/month",
-    enabled: false,
-    icon: Shield,
-    category: "Security",
-  },
-  {
-    id: "bulk_processing",
-    name: t("addons.bulkProcessing"),
-    description: t("addons.bulkProcessingDesc"),
-    price: "$24.99/month",
-    enabled: true,
-    icon: Upload,
-    category: "Processing",
-  },
-  {
-    id: "api_access",
-    name: t("addons.apiAccess"),
-    description: t("addons.apiAccessDesc"),
-    price: "$12.99/month",
-    enabled: false,
-    icon: Zap,
-    category: "API",
-  },
-  {
-    id: "export_tools",
-    name: t("addons.exportTools"),
-    description: t("addons.exportToolsDesc"),
-    price: "$7.99/month",
-    enabled: true,
-    icon: Download,
-    category: "Tools",
-  },
-];
-
 export function RagSettings() {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -112,7 +54,8 @@ export function RagSettings() {
   const [credentialsLoading, setCredentialsLoading] = useState(true);
   const [dbFeatures, setDbFeatures] = useState<Feature[]>([]);
   const [featuresLoading, setFeaturesLoading] = useState(true);
-  const [addons, setAddons] = useState<Feature[]>([]);
+  let [addons, setAddons] = useState<Feature[]>([]);
+  addons = [];
   const [selectedFeature, setSelectedFeature] = useState<Feature | null>(null);
   const [showActivateModal, setShowActivateModal] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);

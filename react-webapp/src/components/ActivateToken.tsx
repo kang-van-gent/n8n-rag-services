@@ -190,6 +190,7 @@ export function ActivateToken() {
                 const featureList = Array.isArray(plan.features)
                   ? plan.features
                   : [];
+                const isSinglePlan = plans.length === 1; // center single card
                 return (
                   <div
                     key={plan.id}
@@ -198,7 +199,9 @@ export function ActivateToken() {
                       "glassmorphism rounded-2xl p-6 border cursor-pointer transition-all duration-300 relative overflow-hidden hover:shadow-lg transform hover:scale-[1.02]",
                       isSelected
                         ? `${vis.borderColor} shadow-lg scale-105`
-                        : "border-gray-200/20 dark:border-gray-500/20 hover:border-gray-300 dark:hover:border-gray-400"
+                        : "border-gray-200/20 dark:border-gray-500/20 hover:border-gray-300 dark:hover:border-gray-400",
+                      // If only one plan, place it in the middle column on md+ screens
+                      isSinglePlan && "md:col-start-2"
                     )}
                   >
                     {plan.key?.toLowerCase() === "standard" && (
