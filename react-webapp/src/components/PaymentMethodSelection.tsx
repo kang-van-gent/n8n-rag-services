@@ -196,6 +196,10 @@ interface PaymentMethodSelectionProps {
     planName?: string;
     planType?: string;
     token?: any;
+    // Upgrade-specific properties
+    isUpgrade?: boolean;
+    targetPlan?: string;
+    upgradeDetails?: any;
   };
 }
 

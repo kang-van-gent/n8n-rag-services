@@ -443,6 +443,101 @@ export function Users() {
     }
   };
 
+  // Dedicated function to handle plan upgrades via internet banking
+  const completeInternetBankingUpgrade = async (paymentData: {
+    userId: string;
+    amount: number;
+    currency: string;
+    description: string;
+    chargeId?: string;
+    orderId?: string;
+    subscriptionContext?: {
+      planName?: string;
+      planType?: string;
+      targetPlan?: string;
+      token?: any;
+      isUpgrade?: boolean;
+      upgradeDetails?: any;
+    };
+  }) => {
+    console.log(
+      "Starting internet banking upgrade - resetting cancellation flag"
+    );
+
+    // Reset cancellation flag for successful upgrade processing
+    setPaymentCancelled(false);
+
+    console.log("Starting internet banking upgrade completion:", {
+      userId: paymentData.userId,
+      amount: paymentData.amount,
+      targetPlan: paymentData.subscriptionContext?.targetPlan,
+      hasChargeId: !!paymentData.chargeId,
+      hasOrderId: !!paymentData.orderId,
+    });
+
+    // Extra safety check - if this function is called but user is not logged in, abort
+    if (!user?.id) {
+      console.error("No user found - aborting upgrade");
+      setPaymentCancelled(true);
+      return;
+    }
+
+    // Extra safety check - if no subscription context or target plan, abort
+    if (!paymentData.subscriptionContext?.targetPlan) {
+      console.error("Missing upgrade target plan - aborting upgrade");
+      setPaymentCancelled(true);
+      showAlertModal(
+        "Upgrade Data Missing",
+        "Missing upgrade plan information. Please try the upgrade again.",
+        "error"
+      );
+      return;
+    }
+
+    // Validate that we have evidence of a successful payment
+    if (!paymentData.chargeId && !paymentData.orderId) {
+      console.error(
+        "Internet banking upgrade failed: No payment evidence provided"
+      );
+      setPaymentCancelled(true);
+      showAlertModal(
+        "Payment Verification Failed",
+        "Unable to verify payment success. No transaction ID received.",
+        "error"
+      );
+      return;
+    }
+
+    try {
+      console.log(
+        "Processing internet banking upgrade to:",
+        paymentData.subscriptionContext.targetPlan
+      );
+
+      // Use the same upgrade logic as credit cards but with internet banking payment method
+      const targetPlan = paymentData.subscriptionContext.targetPlan;
+      await processUpgrade(
+        targetPlan,
+        paymentData.chargeId || paymentData.orderId,
+        "internet_banking",
+        paymentData.amount // Pass the actual amount paid
+      );
+
+      console.log(
+        "Internet banking upgrade completed successfully - processUpgrade handles success message"
+      );
+    } catch (error) {
+      console.error("Internet banking upgrade processing error:", error);
+      showAlertModal(
+        "Upgrade Processing Failed",
+        `Payment was successful but upgrade processing failed: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }. Please contact support.`,
+        "error"
+      );
+    }
+  };
+
   const handlePaymentReturns = async () => {
     const urlParams = new URLSearchParams(window.location.search);
     const paymentStatus = urlParams.get("payment");
@@ -567,13 +662,10 @@ export function Users() {
   };
 
   const handleSuccessfulPaymentReturn = async () => {
-    // Early exit if payment was already marked as cancelled
-    if (paymentCancelled) {
-      console.log("Payment already cancelled - aborting success processing");
-      return;
-    }
-
     console.log("Processing successful payment return");
+
+    // Reset cancellation flag for successful payment processing
+    setPaymentCancelled(false);
 
     // Get all possible pending payment data
     const pendingRenewal = localStorage.getItem("pendingRenewal");
@@ -696,11 +788,14 @@ export function Users() {
   const processUpgradeReturn = async (pendingUpgradeJson: string) => {
     const upgradeData = JSON.parse(pendingUpgradeJson);
     localStorage.removeItem("pendingUpgrade");
+
+    // Set the upgrade data to state so completeUpgrade can access it
     setPendingUpgradeData(upgradeData);
 
     console.log("Processing upgrade return:", {
       hasChargeId: !!upgradeData.chargeId,
       hasOrderId: !!upgradeData.orderId,
+      targetPlan: upgradeData.targetPlan,
     });
 
     // Validate that we have payment evidence before completing
@@ -714,20 +809,49 @@ export function Users() {
       return;
     }
 
-    console.log("Completing upgrade");
-    // Complete the upgrade
-    await completeUpgrade({
-      chargeId: upgradeData.chargeId,
-      orderId: upgradeData.orderId,
-    });
+    // Validate that we have upgrade context
+    if (!upgradeData.targetPlan) {
+      console.error("Upgrade return without target plan information");
+      showAlertModal(
+        "Upgrade Data Missing",
+        "Missing upgrade plan information. Please try the upgrade again.",
+        "error"
+      );
+      return;
+    }
+
+    console.log(
+      "Completing internet banking upgrade to:",
+      upgradeData.targetPlan
+    );
+
+    // Complete the upgrade with the full context
+    try {
+      await processUpgrade(
+        upgradeData.targetPlan,
+        upgradeData.chargeId || upgradeData.orderId,
+        "internet_banking",
+        upgradeData.amount // Pass the actual amount paid
+      );
+    } catch (error) {
+      console.error("Internet banking upgrade completion error:", error);
+      showAlertModal(
+        "Upgrade Failed",
+        `Plan upgrade failed: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`,
+        "error"
+      );
+    }
   };
 
   const processGeneralPaymentReturn = async (pendingPaymentJson: string) => {
-    // Early exit if payment was cancelled
-    if (paymentCancelled) {
-      console.log("Payment cancelled - aborting general payment processing");
-      return;
-    }
+    console.log(
+      "Processing general payment return - resetting cancellation flag"
+    );
+
+    // Reset cancellation flag for successful payment processing
+    setPaymentCancelled(false);
 
     // Safety check - if no JSON data, abort
     if (!pendingPaymentJson || pendingPaymentJson.trim() === "") {
@@ -793,9 +917,19 @@ export function Users() {
     }
 
     if (paymentData.isSubscriptionPayment && paymentData.subscriptionContext) {
-      console.log("Completing internet banking subscription");
-      // Handle subscription payments (renewal/upgrade via internet banking)
-      await completeInternetBankingSubscription(paymentData);
+      // Check if this is an upgrade or a renewal
+      if (paymentData.subscriptionContext.isUpgrade) {
+        console.log(
+          "Completing internet banking upgrade to:",
+          paymentData.subscriptionContext.targetPlan
+        );
+        // Handle upgrade payments via internet banking
+        await completeInternetBankingUpgrade(paymentData);
+      } else {
+        console.log("Completing internet banking subscription renewal");
+        // Handle subscription renewal payments via internet banking
+        await completeInternetBankingSubscription(paymentData);
+      }
     } else {
       console.log("Completing regular payment order");
       // Handle regular payment orders (add-ons, etc.)
@@ -1482,14 +1616,29 @@ export function Users() {
         Math.ceil((expiredAt.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
       );
 
-      // Calculate what user has already paid (prorated)
-      const usedDays = totalDays - remainingDays;
+      console.log("Upgrade pricing calculation debug:", {
+        now: now.toISOString(),
+        expiredAt: expiredAt.toISOString(),
+        totalDays,
+        remainingDays,
+        currentPlanPrice: renewalPricing.totalPrice,
+        targetPlanPrice: targetPricing.totalPrice,
+      });
+
+      // Calculate what user has already paid for the remaining period
       const alreadyPaidForRemainingPeriod =
         (renewalPricing.totalPrice * remainingDays) / totalDays;
 
       // Calculate target plan price for remaining period
       const targetPriceForRemainingPeriod =
         (targetPricing.totalPrice * remainingDays) / totalDays;
+
+      console.log("Prorated calculations:", {
+        alreadyPaidForRemainingPeriod,
+        targetPriceForRemainingPeriod,
+        difference:
+          targetPriceForRemainingPeriod - alreadyPaidForRemainingPeriod,
+      });
 
       // Upgrade cost is the difference
       const upgradePrice = Math.max(
@@ -1503,9 +1652,19 @@ export function Users() {
         targetPricing.totalPrice - renewalPricing.totalPrice
       );
 
+      // For production, use immediate upgrade price (simpler and more predictable)
+      // TODO: Implement proper prorated calculation later if needed
+      const finalUpgradePrice = immediateUpgradePrice;
+
+      console.log("Final upgrade pricing:", {
+        immediateUpgradePrice,
+        proratedUpgradePrice: upgradePrice,
+        usingPrice: finalUpgradePrice,
+      });
+
       const result = {
-        upgradePrice: Math.round(upgradePrice),
-        immediateUpgradePrice: Math.round(immediateUpgradePrice), // Add this for testing
+        upgradePrice: Math.round(finalUpgradePrice), // Use immediate price for now
+        immediateUpgradePrice: Math.round(immediateUpgradePrice),
         targetPricing,
         remainingDays,
         currency: targetPricing.currency,
@@ -1664,7 +1823,12 @@ export function Users() {
       );
 
       if (result.success) {
-        await processUpgrade(targetPlan, result.chargeId);
+        await processUpgrade(
+          targetPlan,
+          result.chargeId,
+          "internet_banking", // This is for internet banking modal payments
+          upgradeDetails.upgradePrice // Pass the actual amount
+        );
       } else {
         showAlertModal(
           "Payment Failed",
@@ -1692,26 +1856,121 @@ export function Users() {
   }) => {
     if (!pendingUpgradeData || !user?.id) return;
 
-    await processUpgrade(pendingUpgradeData.targetPlan, paymentResult.chargeId);
+    await processUpgrade(
+      pendingUpgradeData.targetPlan,
+      paymentResult.chargeId,
+      "credit_card", // This is for credit card payments
+      pendingUpgradeData.amount // Pass the actual amount paid
+    );
   };
 
-  const processUpgrade = async (targetPlan: string, chargeId?: string) => {
-    if (!user?.id || !token) return;
+  const processUpgrade = async (
+    targetPlan: string,
+    chargeId?: string,
+    paymentMethod: string = "credit_card",
+    actualAmountPaid?: number // Add the actual amount paid parameter
+  ) => {
+    console.log("🚀 Starting processUpgrade:", {
+      targetPlan,
+      chargeId,
+      paymentMethod,
+      actualAmountPaid,
+      userId: user?.id,
+      hasToken: !!token,
+      tokenLoading,
+    });
+
+    if (!user?.id) {
+      console.error("❌ processUpgrade early return - missing user:", {
+        hasUser: !!user?.id,
+      });
+      return;
+    }
+
+    // For upgrades, we don't need the current token since we're replacing it
+    // We can proceed even if token is null (this is expected during upgrade flow)
+    console.log(
+      "ℹ️ Proceeding with upgrade without requiring current token (will be replaced anyway)"
+    );
 
     try {
+      console.log("📝 Step 1: Deactivating current token...");
       // 1. Deactivate current token
       await TokenService.deactivateToken(user.id);
+      console.log("✅ Current token deactivated successfully");
 
       // 2. Create new token with target plan using sophisticated composition
+      console.log("📝 Step 2: Creating new token data...");
       const billingCycle =
         billingSettings?.billing_cycle === "yearly" ? "yearly" : "monthly";
       const newTokenData = composeToken(targetPlan, billingCycle);
+      console.log("✅ New token data composed:", newTokenData);
 
+      console.log("📝 Step 3: Creating new token in database...");
       const newToken = await TokenService.createToken(user.id, newTokenData);
+      console.log("✅ New token created successfully:", newToken);
 
       // 3. Create subscription history record
-      const upgradeDetails = await calculateUpgradePrice(targetPlan);
+      console.log("📝 Step 4: Calculating upgrade details...");
+      let upgradeDetails = await calculateUpgradePrice(targetPlan);
+
+      // If calculateUpgradePrice fails due to missing token, use a fallback calculation
+      if (!upgradeDetails) {
+        console.log(
+          "⚠️ calculateUpgradePrice failed, using fallback calculation..."
+        );
+        // Get the target plan pricing directly
+        try {
+          const targetPricing = await PricingService.calculateRenewalPrice(
+            { package: targetPlan, addons: [] },
+            []
+          );
+          upgradeDetails = {
+            upgradePrice: actualAmountPaid || targetPricing.totalPrice, // Use actual amount paid if available
+            targetPricing,
+            currency: targetPricing.currency,
+            remainingDays: 30,
+            immediateUpgradePrice: actualAmountPaid || targetPricing.totalPrice,
+          };
+          console.log(
+            "💰 Fallback upgrade details calculated:",
+            upgradeDetails
+          );
+        } catch (error) {
+          console.error("❌ Fallback pricing calculation failed:", error);
+          // Use a default price if all else fails
+          upgradeDetails = {
+            upgradePrice: actualAmountPaid || 701, // Use actual amount paid or default
+            currency: "THB",
+            remainingDays: 30,
+            immediateUpgradePrice: actualAmountPaid || 701,
+            targetPricing: {
+              basePrice: 701,
+              addOnPrice: 0,
+              totalPrice: 701,
+              currency: "THB",
+              breakdown: [
+                {
+                  type: "plan" as const,
+                  name: targetPlan,
+                  price: 701,
+                  currency: "THB",
+                  period: "month",
+                },
+              ],
+            },
+          };
+          console.log("💰 Using default upgrade details:", upgradeDetails);
+        }
+      } else {
+        console.log(
+          "💰 Upgrade details calculated successfully:",
+          upgradeDetails
+        );
+      }
+
       if (upgradeDetails) {
+        console.log("📝 Step 5: Creating subscription record...");
         // Map plan name to plan type enum
         const planTypeMapping: Record<
           string,
@@ -1725,38 +1984,64 @@ export function Users() {
         };
 
         const planType = planTypeMapping[targetPlan.toLowerCase()] || "basic";
+        console.log("🏷️ Plan type mapped:", { targetPlan, planType });
 
-        await SubscriptionService.createSubscription({
+        const subscriptionData = {
           user_id: user.id,
           plan_name: targetPlan,
           plan_type: planType,
-          amount: upgradeDetails.upgradePrice,
+          amount: actualAmountPaid || upgradeDetails.upgradePrice, // Use actual amount paid if provided
           currency: upgradeDetails.currency,
-          billing_cycle:
-            billingSettings?.billing_cycle === "yearly" ? "yearly" : "monthly",
+          billing_cycle: (billingSettings?.billing_cycle === "yearly"
+            ? "yearly"
+            : "monthly") as "monthly" | "yearly",
           transaction_id: chargeId || null,
-          status: "active",
+          status: "active" as const,
           started_at: new Date().toISOString(),
           expires_at:
             billingSettings?.billing_cycle === "yearly"
               ? new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString()
               : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
           cancelled_at: null,
-          payment_method: "credit_card",
-        });
+          payment_method: paymentMethod,
+        };
+        console.log("📋 Subscription data prepared:", subscriptionData);
+
+        const subscriptionResult = await SubscriptionService.createSubscription(
+          subscriptionData
+        );
+        console.log(
+          "✅ Subscription created successfully:",
+          subscriptionResult
+        );
+      } else {
+        console.warn(
+          "⚠️ No upgrade details available - skipping subscription creation"
+        );
       }
 
       // 4. Refresh token and user data
+      console.log("📝 Step 6: Refreshing token data...");
       await refreshToken();
+      console.log("✅ Token data refreshed successfully");
 
       const planName =
         availablePlans.find((p) => p.key === targetPlan)?.name || targetPlan;
+      console.log(
+        "🎉 Upgrade completed successfully! Showing success message..."
+      );
       showAlertModal(
         "Success",
         `Successfully upgraded to ${planName} plan!`,
         "success"
       );
     } catch (error) {
+      console.error("❌ processUpgrade failed with error:", error);
+      console.error(
+        "❌ Error stack:",
+        error instanceof Error ? error.stack : "No stack trace"
+      );
+
       // Show more detailed error information
       const errorMessage =
         error instanceof Error ? error.message : "Unknown error occurred";
@@ -1965,13 +2250,16 @@ export function Users() {
       );
     });
 
+    // If no current token available (during upgrade), start with empty addons
+    const finalAddons = token ? filteredAddons : [];
+
     return {
       package: cleanPkg,
       token: tokenStr,
       status: "active", // Set to active for upgrades
       type: (type || "monthly").toLowerCase(),
       features,
-      addons: filteredAddons, // Use filtered add-ons instead of all
+      addons: finalAddons, // Use filtered add-ons or empty array if no current token
       expiredAt,
     };
   };
@@ -3617,6 +3905,9 @@ Generated on: ${new Date().toLocaleString()}
             planName: pendingUpgradeData.targetPlan,
             planType: pendingUpgradeData.targetPlan.toLowerCase(),
             token: pendingUpgradeData.token,
+            isUpgrade: true, // Flag to indicate this is an upgrade, not a renewal
+            targetPlan: pendingUpgradeData.targetPlan, // Target plan for the upgrade
+            upgradeDetails: pendingUpgradeData.upgradeDetails, // Full upgrade context
           }}
         />
       )}
