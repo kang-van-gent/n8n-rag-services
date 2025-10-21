@@ -634,9 +634,6 @@ export function RagSettings() {
               <p className="text-gray-600 dark:text-gray-300 mb-4">
                 {t("ragSettings.needTokenMessage")}
               </p>
-              <button className="btn-aura px-6 py-2 text-sm font-semibold rounded-lg">
-                {t("ragSettings.activateToken")}
-              </button>
             </div>
           )}
         </div>
@@ -654,88 +651,13 @@ export function RagSettings() {
                 {t("ragSettings.activatePlanDescription")}
               </p>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                <div className="p-6 rounded-xl border border-gray-200/30 dark:border-gray-500/20 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20">
-                  <h3 className="font-semibold text-lg text-gray-900 dark:text-gray-100 mb-2">
-                    {t("ragSettings.plans.basic.title")}
-                  </h3>
-                  <p className="text-2xl font-bold text-blue-600 dark:text-blue-400 mb-3">
-                    {t("ragSettings.plans.basic.price")}
-                  </p>
-                  <ul className="text-sm text-gray-600 dark:text-gray-300 space-y-2">
-                    <li>
-                      • {t("ragSettings.plans.basic.features.lineChatBot")}
-                    </li>
-                    <li>
-                      • {t("ragSettings.plans.basic.features.ragStorage")}
-                    </li>
-                    <li>• {t("ragSettings.plans.basic.features.support")}</li>
-                  </ul>
-                </div>
-
-                <div className="p-6 rounded-xl border border-emerald-200 dark:border-emerald-500/30 bg-gradient-to-br from-emerald-50 to-green-50 dark:from-emerald-900/20 dark:to-green-900/20 relative">
-                  <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
-                    <span className="bg-emerald-500 text-white px-3 py-1 rounded-full text-xs font-semibold">
-                      {t("ragSettings.plans.popular")}
-                    </span>
-                  </div>
-                  <h3 className="font-semibold text-lg text-gray-900 dark:text-gray-100 mb-2">
-                    {t("ragSettings.plans.standard.title")}
-                  </h3>
-                  <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400 mb-3">
-                    {t("ragSettings.plans.standard.price")}
-                  </p>
-                  <ul className="text-sm text-gray-600 dark:text-gray-300 space-y-2">
-                    <li>
-                      • {t("ragSettings.plans.standard.features.lineChatBots")}
-                    </li>
-                    <li>
-                      • {t("ragSettings.plans.standard.features.messenger")}
-                    </li>
-                    <li>
-                      • {t("ragSettings.plans.standard.features.ragStorage")}
-                    </li>
-                    <li>
-                      • {t("ragSettings.plans.standard.features.support")}
-                    </li>
-                  </ul>
-                </div>
-
-                <div className="p-6 rounded-xl border border-gray-200/30 dark:border-gray-500/20 bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20">
-                  <h3 className="font-semibold text-lg text-gray-900 dark:text-gray-100 mb-2">
-                    {t("ragSettings.plans.enterprise.title")}
-                  </h3>
-                  <p className="text-2xl font-bold text-purple-600 dark:text-purple-400 mb-3">
-                    {t("ragSettings.plans.enterprise.price")}
-                  </p>
-                  <ul className="text-sm text-gray-600 dark:text-gray-300 space-y-2">
-                    <li>
-                      • {t("ragSettings.plans.enterprise.features.allStandard")}
-                    </li>
-                    <li>
-                      • {t("ragSettings.plans.enterprise.features.ragStorage")}
-                    </li>
-                    <li>
-                      • {t("ragSettings.plans.enterprise.features.calendar")}
-                    </li>
-                    <li>
-                      • {t("ragSettings.plans.enterprise.features.googleDrive")}
-                    </li>
-                    <li>
-                      • {t("ragSettings.plans.enterprise.features.support")}
-                    </li>
-                  </ul>
-                </div>
-              </div>
-
               <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                <button className="btn-aura px-8 py-3 text-base font-semibold rounded-lg flex items-center gap-2">
+                <button
+                  onClick={() => navigate("/dashboard")}
+                  className="btn-aura px-8 py-3 text-base font-semibold rounded-lg flex items-center gap-2"
+                >
                   <Crown className="w-5 h-5" />
                   {t("ragSettings.viewAllPlans")}
-                </button>
-                <button className="px-8 py-3 text-base font-semibold rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors flex items-center gap-2">
-                  <Key className="w-5 h-5" />
-                  {t("ragSettings.activateExistingToken")}
                 </button>
               </div>
             </div>

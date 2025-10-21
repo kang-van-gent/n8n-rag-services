@@ -2894,7 +2894,10 @@ Generated on: ${new Date().toLocaleString()}
                 <p className="text-gray-600 dark:text-gray-300 mb-4">
                   {t("users.activateFeatures")}
                 </p>
-                <button className="btn-aura px-4 py-2 text-sm font-semibold rounded-lg">
+                <button
+                  onClick={() => navigate("/dashboard")}
+                  className="btn-aura px-4 py-2 text-sm font-semibold rounded-lg"
+                >
                   {t("users.choosePlan")}
                 </button>
               </div>
@@ -3646,7 +3649,10 @@ Generated on: ${new Date().toLocaleString()}
               <p className="text-gray-600 dark:text-gray-300 mb-4">
                 {t("users.subscribeMessage")}
               </p>
-              <button className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-medium transition-colors">
+              <button
+                onClick={() => navigate("/dashboard")}
+                className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-medium transition-colors"
+              >
                 {t("users.choosePlan")}
               </button>
             </div>
