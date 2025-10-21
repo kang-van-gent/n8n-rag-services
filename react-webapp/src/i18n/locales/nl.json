@@ -319,6 +319,8 @@
     "noFeaturesAvailable": "Geen Functies Beschikbaar",
     "loadingFeatures": "Functies laden...",
     "availableAddons": "Beschikbare Add-ons",
+    "available": "beschikbaar",
+    "active": "actief",
     "enhanceYourPlan": "Verbeter je {{package}} abonnement",
     "viewCart": "Bekijk Winkelwagen",
     "addon": "Add-on",
@@ -351,7 +353,9 @@
     "supportedFormats": "Ondersteunt: TXT, MD, JSON, CSV (max 10MB)",
     "chooseFiles": "Bestanden Kiezen",
     "uploadedDocuments": "Geüploade Documenten ({{count}})",
-    "untitled": "Naamloos"
+    "untitled": "Naamloos",
+    "comingSoon" : "Binnenkort Beschikbaar",
+    "cartSummary": "Winkelwagensamenvatting"
   },
   "users": {
     "myProfile": "Mijn Profiel",
@@ -511,5 +515,56 @@
     "noSubscriptions": "Geen Actieve Abonnementen",
     "subscriptionsWillAppearHere": "Je actieve abonnementen verschijnen hier",
     "invoiceHistory": "Factuurgeschiedenis"
+  },
+  "howTo": {
+    "instructionsLabel": "Installatie-instructies",
+    "platforms": {
+      "facebook": "Facebook Messenger",
+      "line": "LINE Messaging API"
+    },
+    "additionalReference": "Aanvullende Referentie",
+    "webhook": {
+      "title": "Webhook URL Instelling",
+      "facebook": {
+        "title": "Facebook Messenger",
+        "text": "Om je Facebook Messenger webhook in te stellen, moet je de webhook URL configureren in je Facebook App-instellingen. Ga naar de Facebook Developer Console, navigeer naar de Messenger-instellingen van je app, en voeg de hierboven vermelde webhook URL toe. Zorg ervoor dat je het verificatietoken instelt en de benodigde machtigingen configureert voor je bot om berichten te ontvangen en te verzenden.",
+        "instructions": "Volg deze stappen om je Facebook Messenger webhook te configureren:",
+        "step1": "1. Ga naar Facebook Developer Console",
+        "step2": "2. Navigeer naar de Messenger-instellingen van je app",
+        "step3": "3. Voeg deze webhook URL toe",
+        "step4": "4. Stel het verificatietoken in en configureer machtigingen"
+      },
+      "line": {
+        "title": "LINE Messaging API",
+        "text": "Voor LINE Messaging API webhook setup, ga naar de LINE Developer Console en navigeer naar je kanaalinstellingen. Voeg in het Messaging API-tabblad de hierboven getoonde webhook URL toe. Zorg ervoor dat je SSL-certificaat is geverifieerd en de webhook is ingeschakeld. Dit stelt je LINE bot in staat om berichten en gebeurtenissen van gebruikers te ontvangen.",
+        "instructions": "Volg deze stappen om je LINE webhook te configureren:",
+        "step1": "1. Ga naar LINE Developer Console",
+        "step2": "2. Selecteer je kanaal",
+        "step3": "3. Voeg deze webhook URL toe in Messaging API-instellingen",
+        "step4": "4. Controleer SSL-certificaat en activeer webhook"
+      }
+    },
+    "credential": {
+      "title": "Referentie Configuratie",
+      "facebook": {
+        "title": "Facebook Messenger",
+        "text": "Om Facebook Messenger referenties te configureren, moet je een Page Access Token verkrijgen van de Facebook Developer Console. Dit token stelt je applicatie in staat om berichten te verzenden namens je Facebook-pagina. Configureer daarnaast het webhook verificatietoken om veilige communicatie tussen Facebook en je applicatie te garanderen.",
+        "instructions": "Configureer je Facebook Messenger referenties:",
+        "step1": "1. Krijg je Page Access Token van Facebook Developer Console",
+        "step2": "2. Configureer webhook verificatietoken",
+        "step3": "3. Stel app-machtigingen in voor berichten",
+        "step4": "4. Test de verbinding"
+      },
+      "line": {
+        "title": "LINE Messaging API",
+        "text": "Voor LINE Messaging API referenties heb je zowel een Channel Access Token als Channel Secret van de LINE Developer Console nodig. De Channel Access Token wordt gebruikt om API-verzoeken te authenticeren, terwijl de Channel Secret wordt gebruikt om webhook handtekeningen te verifiëren. Beide zijn essentieel voor veilige communicatie met het LINE platform.",
+        "instructions": "Configureer je LINE referenties:",
+        "step1": "1. Krijg Channel Access Token van LINE Developer Console",
+        "step2": "2. Kopieer Channel Secret",
+        "step3": "3. Stel webhook URL in in Messaging API-instellingen",
+        "step4": "4. Test de webhook verbinding"
+      }
+    },
+    "close": "Sluiten"
   }
 }

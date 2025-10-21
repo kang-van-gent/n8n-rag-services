@@ -323,6 +323,7 @@
     "loadingFeatures": "Loading features...",
     "availableAddons": "Available Add-ons",
     "available": "available",
+    "active": "active",
     "enhanceYourPlan": "Enhance your {{package}} plan",
     "viewCart": "View Cart",
     "addon": "Add-on",
@@ -360,7 +361,9 @@
     "supportedFormats": "Supports: TXT, MD, JSON, CSV (max 10MB)",
     "chooseFiles": "Choose Files",
     "uploadedDocuments": "Uploaded Documents ({{count}})",
-    "untitled": "Untitled"
+    "untitled": "Untitled",
+    "comingSoon": "Coming Soon",
+    "cartSummary": "Cart Summary"
   },
   "users": {
     "myProfile": "My Profile",
@@ -525,5 +528,56 @@
     "noSubscriptions": "No Active Subscriptions",
     "subscriptionsWillAppearHere": "Your active subscriptions will appear here",
     "invoiceHistory": "Invoice History"
+  },
+  "howTo": {
+    "instructionsLabel": "Setup Instructions",
+    "platforms": {
+      "facebook": "Facebook Messenger",
+      "line": "LINE Messaging API"
+    },
+    "additionalReference": "Additional Reference",
+    "webhook": {
+      "title": "Webhook URL Setup",
+      "facebook": {
+        "title": "Facebook Messenger",
+        "text": "To set up your Facebook Messenger webhook, you'll need to configure the webhook URL in your Facebook App settings. Go to the Facebook Developer Console, navigate to your app's Messenger settings, and add the webhook URL provided above. Make sure to set the verify token and configure the necessary permissions for your bot to receive and send messages.",
+        "instructions": "Follow these steps to configure your Facebook Messenger webhook:",
+        "step1": "1. Go to Facebook Developer Console",
+        "step2": "2. Navigate to your app's Messenger settings",
+        "step3": "3. Add this webhook URL",
+        "step4": "4. Set the verify token and configure permissions"
+      },
+      "line": {
+        "title": "LINE Messaging API",
+        "text": "For LINE Messaging API webhook setup, access the LINE Developer Console and navigate to your channel settings. In the Messaging API tab, add the webhook URL shown above. Ensure that your SSL certificate is verified and the webhook is enabled. This allows your LINE bot to receive messages and events from users.",
+        "instructions": "Follow these steps to configure your LINE webhook:",
+        "step1": "1. Go to LINE Developer Console",
+        "step2": "2. Select your channel",
+        "step3": "3. Add this webhook URL in Messaging API settings",
+        "step4": "4. Verify SSL certificate and enable webhook"
+      }
+    },
+    "credential": {
+      "title": "Credential Configuration",
+      "facebook": {
+        "title": "Facebook Messenger",
+        "text": "To configure Facebook Messenger credentials, you need to obtain a Page Access Token from the Facebook Developer Console. This token allows your application to send messages on behalf of your Facebook page. Additionally, configure the webhook verify token to ensure secure communication between Facebook and your application.",
+        "instructions": "Configure your Facebook Messenger credentials:",
+        "step1": "1. Get your Page Access Token from Facebook Developer Console",
+        "step2": "2. Configure webhook verify token",
+        "step3": "3. Set up app permissions for messaging",
+        "step4": "4. Test the connection"
+      },
+      "line": {
+        "title": "LINE Messaging API",
+        "text": "For LINE Messaging API credentials, you'll need both a Channel Access Token and Channel Secret from the LINE Developer Console. The Channel Access Token is used to authenticate API requests, while the Channel Secret is used to verify webhook signatures. Both are essential for secure communication with the LINE platform.",
+        "instructions": "Configure your LINE credentials:",
+        "step1": "1. Get Channel Access Token from LINE Developer Console",
+        "step2": "2. Copy Channel Secret",
+        "step3": "3. Set webhook URL in Messaging API settings",
+        "step4": "4. Test the webhook connection"
+      }
+    },
+    "close": "Close"
   }
 }

@@ -1,23 +1,16 @@
 import React, { useState, useEffect } from "react";
 import {
-  Brain,
-  Database,
   Settings2,
-  Zap,
   Package,
   CheckCircle,
   AlertCircle,
   Wifi,
   WifiOff,
-  Plus,
-  Minus,
   Key,
   Calendar,
   Globe,
   Shield,
   BarChart3,
-  MessageSquare,
-  FileText,
   Download,
   Upload,
   Settings,
@@ -30,7 +23,8 @@ import {
   Trash2,
   Crown,
   ShoppingCart,
-  ArrowRight,
+  HelpCircle,
+  Zap,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
@@ -45,31 +39,12 @@ import {
   Document,
   UploadProgress,
 } from "../services/DocumentService";
-import {
-  TokenFeatureService,
-  type TokenCompat,
-} from "../services/TokenFeatureService";
+import { TokenFeatureService } from "../services/TokenFeatureService";
 import { useCart } from "../contexts/CartContext";
 import { cn } from "../utils/cn";
+import HowToModal from "../components/HowToModal";
 
-// Helper function to get icon for feature based on category or key
-const getFeatureIcon = (feature: Feature) => {
-  if (feature.key.includes("document")) return FileText;
-  if (feature.key.includes("ai") || feature.key.includes("generation"))
-    return Brain;
-  if (feature.key.includes("search") || feature.key.includes("vector"))
-    return Database;
-  if (feature.key.includes("analytics")) return BarChart3;
-  if (feature.key.includes("chat") || feature.key.includes("message"))
-    return MessageSquare;
-  if (feature.key.includes("security")) return Shield;
-  if (feature.key.includes("api")) return Zap;
-  if (feature.key.includes("export")) return Download;
-  if (feature.key.includes("upload") || feature.key.includes("import"))
-    return Upload;
-  return Package; // Default icon
-};
-
+// Helper function to get available add-ons
 const getAvailableAddons = (t: any) => [
   {
     id: "advanced_analytics",
@@ -137,8 +112,9 @@ export function RagSettings() {
   const [credentialsLoading, setCredentialsLoading] = useState(true);
   const [dbFeatures, setDbFeatures] = useState<Feature[]>([]);
   const [featuresLoading, setFeaturesLoading] = useState(true);
-  const [addons, setAddons] = useState(getAvailableAddons(t));
+  const [addons, setAddons] = useState<Feature[]>([]);
   const [selectedFeature, setSelectedFeature] = useState<Feature | null>(null);
+  const [showActivateModal, setShowActivateModal] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [showCredentialForm, setShowCredentialForm] = useState(false);
   const [credentialForm, setCredentialForm] = useState({
@@ -162,6 +138,13 @@ export function RagSettings() {
     null
   );
 
+  // How To Modal states
+  const [showWebhookModal, setShowWebhookModal] = useState(false);
+  const [showCredentialModal, setShowCredentialModal] = useState(false);
+  const [modalCurrentPage, setModalCurrentPage] = useState<"facebook" | "line">(
+    "facebook"
+  );
+
   // Fetch features from database
   useEffect(() => {
     const fetchFeatures = async () => {
@@ -178,6 +161,17 @@ export function RagSettings() {
 
     fetchFeatures();
   }, []);
+
+  // Load available add-ons when token or db features change
+  useEffect(() => {
+    if (dbFeatures.length > 0) {
+      const availableAddOns = TokenFeatureService.getAvailableAddOns(
+        dbFeatures,
+        token
+      );
+      setAddons(availableAddOns);
+    }
+  }, [dbFeatures, token]);
 
   // Fetch user credentials
   useEffect(() => {
@@ -230,14 +224,6 @@ export function RagSettings() {
     }
   }, [user?.id]);
 
-  const toggleAddon = (addonId: string) => {
-    setAddons((prev) =>
-      prev.map((addon) =>
-        addon.id === addonId ? { ...addon, enabled: !addon.enabled } : addon
-      )
-    );
-  };
-
   const openFeatureModal = (feature: Feature) => {
     setSelectedFeature(feature);
     setIsModalOpen(true);
@@ -272,7 +258,7 @@ export function RagSettings() {
       }
 
       // Create credential using CredentialService
-      const newCredential = await CredentialService.createCredential(
+      await CredentialService.createCredential(
         user.id,
         selectedFeature.key,
         credentialForm.accessToken,
@@ -437,13 +423,59 @@ export function RagSettings() {
     }
   };
 
-  // Get filtered features based on token
   const getIncludedFeatures = () => {
     return TokenFeatureService.filterIncludedFeatures(dbFeatures, token);
   };
 
   const getAvailableAddOns = (): Feature[] => {
     return TokenFeatureService.getAvailableAddOns(dbFeatures, token);
+  };
+
+  // Helper function to get icon for a feature
+  const getFeatureIcon = (feature: Feature) => {
+    switch (feature.key) {
+      case "advanced_analytics":
+        return BarChart3;
+      case "multi_language":
+        return Globe;
+      case "advanced_security":
+        return Shield;
+      case "bulk_processing":
+        return Upload;
+      case "api_access":
+        return Zap;
+      case "export_tools":
+        return Download;
+      default:
+        return Settings2;
+    }
+  };
+
+  // Helper function to get addon pricing
+  const getAddonPricing = (featureKey: string): string => {
+    const pricing = TokenFeatureService.getAddOnPricing();
+    const price = pricing[featureKey];
+    return price ? `฿${price.price}/${price.period}` : "Contact us";
+  };
+
+  // Handle adding item to cart
+  const handleAddToCart = (feature: Feature) => {
+    if (!token) {
+      setShowActivateModal(true);
+      return;
+    }
+
+    const existingItem = items.find(
+      (item) => item.feature?.key === feature.key
+    );
+
+    if (existingItem) {
+      // Show warning that item is already in cart
+      // You can add toast notification here
+      return;
+    }
+
+    addItem(feature, 1);
   };
 
   // Helper function to determine if a feature is "online"
@@ -457,18 +489,7 @@ export function RagSettings() {
     return userKeys.includes(feature.key);
   };
 
-  // Handle adding item to cart
-  const handleAddToCart = (feature: Feature) => {
-    const existingItem = items.find((item) => item.feature.key === feature.key);
-
-    if (existingItem) {
-      // Show warning that item is already in cart
-      // You can add toast notification here
-      return;
-    }
-
-    addItem(feature, 1);
-  }; // Group and sort features by category and online/offline status
+  // Group and sort features by category and online/offline status
   const getGroupedFeatures = () => {
     const includedFeatures = getIncludedFeatures();
 
@@ -627,6 +648,16 @@ export function RagSettings() {
                       <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
                         {t("ragSettings.webhookUrl")}
                       </span>
+                      <button
+                        onClick={() => {
+                          setShowWebhookModal(true);
+                          setModalCurrentPage("facebook");
+                        }}
+                        className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors"
+                        title="How to set up webhook"
+                      >
+                        <HelpCircle className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                      </button>
                     </div>
                     <button
                       onClick={copyWebhookUrl}
@@ -954,21 +985,111 @@ export function RagSettings() {
             </div>
             <div className="flex items-center gap-2">
               <span className="px-3 py-1 bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300 rounded-full text-sm font-medium">
-                {t("ragSettings.comingSoon")}
+                {addons.length} {t("ragSettings.available")}
               </span>
             </div>
           </div>
 
-          <div className="text-center py-12">
-            <Package className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-2">
-              {t("ragSettings.comingSoon")}
-            </h3>
-            <p className="text-gray-600 dark:text-gray-300 max-w-md mx-auto">
-              {t("ragSettings.addonsComingSoonDescription")}
-            </p>
-          </div>
+          {/* Add-ons Grid or Coming Soon */}
+          {addons.length === 0 ? (
+            <div className="text-center py-12">
+              <div className="inline-flex items-center justify-center w-16 h-16 bg-gray-100 dark:bg-gray-700 rounded-full mb-4">
+                <Package className="w-8 h-8 text-gray-500 dark:text-gray-400" />
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
+                {t("ragSettings.comingSoon")}
+              </h3>
+              <p className="text-gray-600 dark:text-gray-300">
+                {token
+                  ? t("ragSettings.allAddonsIncluded")
+                  : t("ragSettings.activatePlanForAddons")}
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {addons.map((addon) => {
+                const AddonIcon = getFeatureIcon(addon);
+                return (
+                  <div
+                    key={addon.id}
+                    className="p-4 rounded-xl bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border border-gray-200/50 dark:border-gray-500/30 hover:shadow-lg hover:bg-white/90 dark:hover:bg-gray-800/90 shadow-sm shadow-gray-200/80 dark:shadow-none transition-all duration-200"
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="p-2 rounded-lg bg-gray-100 dark:bg-gray-700">
+                        <AddonIcon className="w-5 h-5 text-gray-500 dark:text-gray-400" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <h3 className="font-semibold text-gray-900 dark:text-gray-100 truncate">
+                            {addon.name}
+                          </h3>
+                          <span className="px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
+                            {t("ragSettings.addon")}
+                          </span>
+                        </div>
+                        <p className="text-sm text-gray-600 dark:text-gray-300 line-clamp-2 mb-3">
+                          {addon.description || "No description available"}
+                        </p>
+                        <div className="flex items-center justify-between">
+                          <span className="font-semibold text-purple-600 dark:text-purple-400">
+                            {getAddonPricing(addon.key)}
+                          </span>
+                          <div className="flex items-center gap-2">
+                            {!items.find(
+                              (item) => item.feature?.key === addon.key
+                            ) && (
+                              <button
+                                onClick={() => handleAddToCart(addon)}
+                                className="px-3 py-1 bg-purple-600 hover:bg-purple-700 text-white text-xs rounded-lg font-medium transition-colors"
+                              >
+                                {t("ragSettings.addToCart")}
+                              </button>
+                            )}
+                            {items.find(
+                              (item) => item.feature?.key === addon.key
+                            ) && (
+                              <span className="px-3 py-1 bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300 text-xs rounded-lg font-medium">
+                                {t("ragSettings.inCart")}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
+
+        {/* Cart Summary */}
+        {itemCount > 0 && (
+          <div className="mt-6 p-4 bg-purple-50 dark:bg-purple-900/20 rounded-xl border border-purple-200 dark:border-purple-500/30">
+            <div className="flex items-center justify-between">
+              <div>
+                <h4 className="font-semibold text-purple-900 dark:text-purple-200">
+                  {t("ragSettings.cartSummary")}
+                </h4>
+                <p className="text-sm text-purple-700 dark:text-purple-300">
+                  {itemCount}{" "}
+                  {itemCount === 1 ? t("cart.item") : t("cart.items")} • Total:
+                  ฿
+                  {items.reduce(
+                    (total, item) => total + item.price * item.quantity,
+                    0
+                  )}
+                </p>
+              </div>
+              <button
+                onClick={() => navigate("/cart")}
+                className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-medium transition-colors"
+              >
+                {t("ragSettings.viewCart")}
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Feature Configuration Modal */}
@@ -1036,7 +1157,19 @@ export function RagSettings() {
               {selectedFeature.key !== "rag_files" && (
                 <div className="p-4 rounded-xl border border-gray-200/30 dark:border-gray-500/20 mb-6">
                   <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3">
-                    {t("ragSettings.configurationStatus")}
+                    <div className="flex items-center gap-2">
+                      {t("ragSettings.configurationStatus")}
+                      <button
+                        onClick={() => {
+                          setShowCredentialModal(true);
+                          setModalCurrentPage("facebook");
+                        }}
+                        className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors"
+                        title="How to set up credentials"
+                      >
+                        <HelpCircle className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                      </button>
+                    </div>
                   </h3>
 
                   {userKeys.includes(selectedFeature.key) ? (
@@ -1403,6 +1536,24 @@ export function RagSettings() {
           </div>
         </div>
       )}
+
+      {/* Webhook Setup Modal */}
+      <HowToModal
+        isOpen={showWebhookModal}
+        onClose={() => setShowWebhookModal(false)}
+        type="webhook"
+        currentPage={modalCurrentPage}
+        onPageChange={setModalCurrentPage}
+      />
+
+      {/* Credential Setup Modal */}
+      <HowToModal
+        isOpen={showCredentialModal}
+        onClose={() => setShowCredentialModal(false)}
+        type="credential"
+        currentPage={modalCurrentPage}
+        onPageChange={setModalCurrentPage}
+      />
     </Layout>
   );
 }

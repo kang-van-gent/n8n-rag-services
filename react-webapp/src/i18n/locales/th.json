@@ -320,6 +320,7 @@
     "loadingFeatures": "กำลังโหลดฟีเจอร์...",
     "availableAddons": "ส่วนเสริมที่มีจำหน่าย",
     "available": "มีให้บริการ",
+    "active": "ใช้งาน",
     "enhanceYourPlan": "ปรับปรุงแผน {{package}} ของคุณ",
     "viewCart": "ดูตะกร้า",
     "addon": "ส่วนเสริม",
@@ -357,7 +358,9 @@
     "supportedFormats": "รองรับ: TXT, MD, JSON, CSV (สูงสุด 10MB)",
     "chooseFiles": "เลือกไฟล์",
     "uploadedDocuments": "เอกสารที่อัปโหลดแล้ว ({{count}})",
-    "untitled": "ไม่มีชื่อ"
+    "untitled": "ไม่มีชื่อ",
+    "comingSoon": "เร็วๆ นี้",
+    "cartSummary": "สรุปตะกร้า"
   },
   "users": {
     "myProfile": "โปรไฟล์ของฉัน",
@@ -522,5 +525,56 @@
     "noSubscriptions": "ไม่มีการสมัครสมาชิกที่ใช้งานอยู่",
     "subscriptionsWillAppearHere": "การสมัครสมาชิกที่ใช้งานอยู่ของคุณจะปรากฏที่นี่",
     "invoiceHistory": "ประวัติใบแจ้งหนี้"
+  },
+  "howTo": {
+    "instructionsLabel": "คำแนะนำการตั้งค่า",
+    "platforms": {
+      "facebook": "Facebook Messenger",
+      "line": "LINE Messaging API"
+    },
+    "additionalReference": "ข้อมูลอ้างอิงเพิ่มเติม",
+    "webhook": {
+      "title": "การตั้งค่า Webhook URL",
+      "facebook": {
+        "title": "Facebook Messenger",
+        "text": "ในการตั้งค่า webhook สำหรับ Facebook Messenger คุณต้องกำหนดค่า webhook URL ในการตั้งค่าแอป Facebook ไปที่ Facebook Developer Console นำทางไปยังการตั้งค่า Messenger ของแอป และเพิ่ม webhook URL ที่ให้มาข้างต้น ตรวจสอบให้แน่ใจว่าได้ตั้งค่า verify token และกำหนดสิทธิ์ที่จำเป็นสำหรับบอทของคุณในการรับและส่งข้อความ",
+        "instructions": "ทำตามขั้นตอนเหล่านี้เพื่อกำหนดค่า Facebook Messenger webhook:",
+        "step1": "1. ไปที่ Facebook Developer Console",
+        "step2": "2. ไปที่การตั้งค่า Messenger ของแอปของคุณ",
+        "step3": "3. เพิ่ม webhook URL นี้",
+        "step4": "4. ตั้งค่า verify token และกำหนดสิทธิ์"
+      },
+      "line": {
+        "title": "LINE Messaging API",
+        "text": "สำหรับการตั้งค่า webhook ของ LINE Messaging API ให้เข้าถึง LINE Developer Console และไปที่การตั้งค่าช่องทางของคุณ ในแท็บ Messaging API ให้เพิ่ม webhook URL ที่แสดงข้างต้น ตรวจสอบให้แน่ใจว่าใบรับรอง SSL ได้รับการตรวจสอบและ webhook ได้เปิดใช้งานแล้ว สิ่งนี้จะช่วยให้บอท LINE ของคุณรับข้อความและเหตุการณ์จากผู้ใช้",
+        "instructions": "ทำตามขั้นตอนเหล่านี้เพื่อกำหนดค่า LINE webhook:",
+        "step1": "1. ไปที่ LINE Developer Console",
+        "step2": "2. เลือกช่องทางของคุณ",
+        "step3": "3. เพิ่ม webhook URL นี้ในการตั้งค่า Messaging API",
+        "step4": "4. ตรวจสอบใบรับรอง SSL และเปิดใช้งาน webhook"
+      }
+    },
+    "credential": {
+      "title": "การกำหนดค่าข้อมูลประจำตัว",
+      "facebook": {
+        "title": "Facebook Messenger",
+        "text": "ในการกำหนดค่าข้อมูลประจำตัว Facebook Messenger คุณต้องได้รับ Page Access Token จาก Facebook Developer Console โทเค็นนี้จะช่วยให้แอปพลิเคชันของคุณส่งข้อความในนาม Facebook page ของคุณ นอกจากนี้ ให้กำหนดค่า webhook verify token เพื่อให้แน่ใจว่าการสื่อสารระหว่าง Facebook และแอปพลิเคชันของคุณปลอดภัย",
+        "instructions": "กำหนดค่าข้อมูลประจำตัว Facebook Messenger ของคุณ:",
+        "step1": "1. รับ Page Access Token จาก Facebook Developer Console",
+        "step2": "2. กำหนดค่า webhook verify token",
+        "step3": "3. ตั้งค่าสิทธิ์แอปสำหรับการส่งข้อความ",
+        "step4": "4. ทดสอบการเชื่อมต่อ"
+      },
+      "line": {
+        "title": "LINE Messaging API",
+        "text": "สำหรับข้อมูลประจำตัว LINE Messaging API คุณต้องใช้ทั้ง Channel Access Token และ Channel Secret จาก LINE Developer Console Channel Access Token ใช้สำหรับการยืนยันตัวตนคำขอ API ในขณะที่ Channel Secret ใช้สำหรับตรวจสอบลายเซ็น webhook ทั้งสองสิ่งนี้จำเป็นสำหรับการสื่อสารที่ปลอดภัยกับแพลตฟอร์ม LINE",
+        "instructions": "กำหนดค่าข้อมูลประจำตัว LINE ของคุณ:",
+        "step1": "1. รับ Channel Access Token จาก LINE Developer Console",
+        "step2": "2. คัดลอก Channel Secret",
+        "step3": "3. ตั้งค่า webhook URL ในการตั้งค่า Messaging API",
+        "step4": "4. ทดสอบการเชื่อมต่อ webhook"
+      }
+    },
+    "close": "ปิด"
   }
 }
