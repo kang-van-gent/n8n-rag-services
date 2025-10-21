@@ -231,6 +231,9 @@ export function Users() {
   const [pendingRenewalData, setPendingRenewalData] = useState<any>(null);
   const [pendingUpgradeData, setPendingUpgradeData] = useState<any>(null);
 
+  // Global flag to stop all payment processing when cancellation is detected
+  const [paymentCancelled, setPaymentCancelled] = useState(false);
+
   useEffect(() => {
     if (user) {
       setUserProfile({
@@ -247,10 +250,13 @@ export function Users() {
       // Load available plans
       loadPlans();
 
-      // Handle payment returns from internet banking
-      handlePaymentReturns();
+      // Only handle payment returns if there's actually a payment parameter
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.has("payment") && !paymentCancelled) {
+        handlePaymentReturns();
+      }
     }
-  }, [user]);
+  }, [user, paymentCancelled]);
 
   // Shared function to handle subscription creation and token renewal for internet banking payments
   const completeInternetBankingSubscription = async (paymentData: {
@@ -266,13 +272,42 @@ export function Users() {
       token?: any;
     };
   }) => {
-    if (!user?.id || !paymentData.subscriptionContext) return;
+    // CRITICAL: Check cancellation flag at the very beginning
+    if (paymentCancelled) {
+      console.log("Payment cancelled - BLOCKING subscription creation");
+      return;
+    }
+
+    console.log("Starting internet banking subscription completion:", {
+      userId: paymentData.userId,
+      amount: paymentData.amount,
+      hasChargeId: !!paymentData.chargeId,
+      hasOrderId: !!paymentData.orderId,
+      hasSubscriptionContext: !!paymentData.subscriptionContext,
+    });
+
+    // Extra safety check - if this function is called but user is not logged in, abort
+    if (!user?.id) {
+      console.error("No user found - aborting subscription creation");
+      setPaymentCancelled(true);
+      return;
+    }
+
+    // Extra safety check - if no subscription context, abort
+    if (!paymentData.subscriptionContext) {
+      console.error(
+        "Missing subscription context - aborting subscription creation"
+      );
+      setPaymentCancelled(true);
+      return;
+    }
 
     // Validate that we have evidence of a successful payment
     if (!paymentData.chargeId && !paymentData.orderId) {
       console.error(
         "Internet banking subscription failed: No payment evidence provided"
       );
+      setPaymentCancelled(true);
       showAlertModal(
         "Payment Verification Failed",
         "Unable to verify payment success. No transaction ID received.",
@@ -281,7 +316,35 @@ export function Users() {
       return;
     }
 
+    // Double-check that the user ID matches the payment data
+    if (user.id !== paymentData.userId) {
+      console.error("User ID mismatch - aborting subscription creation");
+      setPaymentCancelled(true);
+      showAlertModal(
+        "Security Error",
+        "User verification failed. Please log out and try again.",
+        "error"
+      );
+      return;
+    }
+
+    // FINAL CHECK: Verify cancellation flag before creating subscription
+    if (paymentCancelled) {
+      console.log("Payment cancelled before subscription creation - BLOCKING");
+      return;
+    }
+
     try {
+      console.log("Creating subscription record for internet banking payment");
+
+      // CRITICAL: Check cancellation flag before subscription creation
+      if (paymentCancelled) {
+        console.log(
+          "Payment cancelled right before subscription creation - BLOCKING"
+        );
+        return;
+      }
+
       // Create subscription record
       const newExpiryDate = new Date();
       newExpiryDate.setMonth(newExpiryDate.getMonth() + 1); // Add 1 month
@@ -304,7 +367,21 @@ export function Users() {
         transaction_id: paymentData.chargeId || paymentData.orderId || null,
       });
 
+      // CRITICAL: Check cancellation flag after subscription creation
+      if (paymentCancelled) {
+        console.log(
+          "Payment cancelled after subscription creation - BLOCKING success processing"
+        );
+        return;
+      }
+
       if (subscriptionRecord) {
+        // CRITICAL: Check cancellation flag before token renewal
+        if (paymentCancelled) {
+          console.log("Payment cancelled before token renewal - BLOCKING");
+          return;
+        }
+
         // Renew the token if token context is provided
         if (paymentData.subscriptionContext.token) {
           await TokenGenerationService.renewToken(
@@ -313,8 +390,20 @@ export function Users() {
           );
         }
 
+        // CRITICAL: Check cancellation flag before data refresh
+        if (paymentCancelled) {
+          console.log("Payment cancelled before data refresh - BLOCKING");
+          return;
+        }
+
         // Refresh the data
         await loadSubscriptionData(user.id);
+
+        // CRITICAL: Check cancellation flag before success modal
+        if (paymentCancelled) {
+          console.log("Payment cancelled before success modal - BLOCKING");
+          return;
+        }
 
         showAlertModal(
           "Payment Successful",
@@ -325,6 +414,12 @@ export function Users() {
           "success"
         );
       } else {
+        // CRITICAL: Check cancellation flag before error modal
+        if (paymentCancelled) {
+          console.log("Payment cancelled before error modal - BLOCKING");
+          return;
+        }
+
         showAlertModal(
           "Subscription Creation Failed",
           "Payment was successful but subscription record creation failed.",
@@ -332,6 +427,14 @@ export function Users() {
         );
       }
     } catch (error) {
+      // CRITICAL: Check cancellation flag before error modal
+      if (paymentCancelled) {
+        console.log(
+          "Payment cancelled in error handler - BLOCKING error modal"
+        );
+        return;
+      }
+
       showAlertModal(
         "Subscription Processing Failed",
         "Payment was successful but subscription processing failed. Please contact support.",
@@ -344,117 +447,522 @@ export function Users() {
     const urlParams = new URLSearchParams(window.location.search);
     const paymentStatus = urlParams.get("payment");
 
-    if (paymentStatus === "success") {
-      // Handle successful payment return
-      const pendingRenewal = localStorage.getItem("pendingRenewal");
-      const pendingUpgrade = localStorage.getItem("pendingUpgrade");
-      const pendingPayment = localStorage.getItem(
-        "pendingInternetBankingPayment"
-      );
+    // Early return if no payment status parameter
+    if (!paymentStatus) return;
 
-      if (pendingRenewal) {
-        const renewalData = JSON.parse(pendingRenewal);
-        localStorage.removeItem("pendingRenewal");
-        setPendingRenewalData(renewalData);
-        // Complete the renewal - use credit card flow if chargeId exists
-        if (renewalData.chargeId) {
-          await completeCreditCardRenewal({
-            chargeId: renewalData.chargeId,
-            orderId: renewalData.orderId,
-          });
-        } else {
-          completeRenewal({
-            chargeId: renewalData.chargeId,
-            orderId: renewalData.orderId,
-          });
+    console.log("=== PAYMENT REDIRECT RESPONSE ===");
+    console.log("Payment Status:", paymentStatus);
+    console.log("Full URL:", window.location.href);
+    console.log("Search Params:", window.location.search);
+
+    // Log all URL parameters
+    const allParams: Record<string, string> = {};
+    urlParams.forEach((value, key) => {
+      allParams[key] = value;
+    });
+    console.log("All URL Parameters:", allParams);
+
+    // Extract charge_id from URL if available
+    const chargeIdFromUrl = urlParams.get("charge_id");
+    console.log("Charge ID from URL:", chargeIdFromUrl);
+
+    // Check localStorage for payment data
+    const pendingRenewal = localStorage.getItem("pendingRenewal");
+    const pendingUpgrade = localStorage.getItem("pendingUpgrade");
+    const pendingPayment = localStorage.getItem(
+      "pendingInternetBankingPayment"
+    );
+
+    console.log("localStorage Payment Data:", {
+      pendingRenewal: pendingRenewal ? JSON.parse(pendingRenewal) : null,
+      pendingUpgrade: pendingUpgrade ? JSON.parse(pendingUpgrade) : null,
+      pendingPayment: pendingPayment ? JSON.parse(pendingPayment) : null,
+    });
+
+    console.log("=== END PAYMENT REDIRECT RESPONSE ===");
+
+    // Now process the payment based on the status
+    try {
+      if (paymentStatus === "success") {
+        // If success but no payment data, likely already processed - just ignore silently
+        if (!pendingRenewal && !pendingUpgrade && !pendingPayment) {
+          console.log(
+            "Success status but no payment data - likely already processed, ignoring silently"
+          );
+          return;
         }
-      } else if (pendingUpgrade) {
-        const upgradeData = JSON.parse(pendingUpgrade);
-        localStorage.removeItem("pendingUpgrade");
-        setPendingUpgradeData(upgradeData);
-        // Complete the upgrade
-        completeUpgrade({
-          chargeId: upgradeData.chargeId,
-          orderId: upgradeData.orderId,
-        });
-      } else if (pendingPayment) {
-        // Handle general internet banking payment return
-        const paymentData = JSON.parse(pendingPayment);
-        localStorage.removeItem("pendingInternetBankingPayment");
 
-        if (
-          paymentData.isSubscriptionPayment &&
-          paymentData.subscriptionContext
-        ) {
-          // Handle subscription payments (renewal/upgrade via internet banking)
-          await completeInternetBankingSubscription(paymentData);
-        } else {
-          // Handle regular payment orders (add-ons, etc.)
-          if (paymentData.orderId) {
-            try {
-              const { error } = await supabase
-                .from("payment_orders")
-                .update({
-                  status: "completed",
-                  completed_at: new Date().toISOString(),
-                })
-                .eq("id", paymentData.orderId);
-
-              if (error) {
-              } else {
-                // Refresh subscription data to reflect the new payment
-                await loadSubscriptionData(user?.id || "");
-
-                showAlertModal(
-                  "Payment Successful",
-                  "Your internet banking payment has been completed successfully!",
-                  "success"
-                );
-              }
-            } catch (error) {
-              showAlertModal(
-                "Payment Status Unknown",
-                "We couldn't confirm your payment status. Please check your account or contact support.",
-                "error"
+        // If we have charge_id from URL but missing from localStorage data, add it
+        if (chargeIdFromUrl) {
+          if (pendingRenewal) {
+            const renewalData = JSON.parse(pendingRenewal);
+            if (!renewalData.chargeId) {
+              renewalData.chargeId = chargeIdFromUrl;
+              localStorage.setItem(
+                "pendingRenewal",
+                JSON.stringify(renewalData)
               );
+              console.log("Added charge_id to pendingRenewal from URL");
+            }
+          }
+
+          if (pendingUpgrade) {
+            const upgradeData = JSON.parse(pendingUpgrade);
+            if (!upgradeData.chargeId) {
+              upgradeData.chargeId = chargeIdFromUrl;
+              localStorage.setItem(
+                "pendingUpgrade",
+                JSON.stringify(upgradeData)
+              );
+              console.log("Added charge_id to pendingUpgrade from URL");
+            }
+          }
+
+          if (pendingPayment) {
+            const paymentData = JSON.parse(pendingPayment);
+            if (!paymentData.chargeId) {
+              paymentData.chargeId = chargeIdFromUrl;
+              localStorage.setItem(
+                "pendingInternetBankingPayment",
+                JSON.stringify(paymentData)
+              );
+              console.log("Added charge_id to pendingPayment from URL");
             }
           }
         }
-      }
 
-      // Clean up URL
-      window.history.replaceState({}, document.title, window.location.pathname);
-    } else if (paymentStatus === "failed") {
+        // CRITICAL: Only call success handler if payment not cancelled
+        if (!paymentCancelled) {
+          await handleSuccessfulPaymentReturn();
+        } else {
+          console.log("Payment cancelled - BLOCKING success handler");
+        }
+      } else if (paymentStatus === "failed" || paymentStatus === "cancelled") {
+        // Set global cancellation flag to stop ALL processing
+        setPaymentCancelled(true);
+        await handleFailedPaymentReturn();
+      } else {
+        console.warn(`Unknown payment status: ${paymentStatus}`);
+        // Set global cancellation flag for unknown status too
+        setPaymentCancelled(true);
+        showAlertModal(
+          "Payment Status Unknown",
+          "Received an unknown payment status. Please check your account or contact support.",
+          "error"
+        );
+      }
+    } catch (error) {
+      console.error("Error handling payment return:", error);
+      // Set global cancellation flag on error
+      setPaymentCancelled(true);
       showAlertModal(
-        "Payment Failed",
-        "Internet banking payment was cancelled or failed. Please try again.",
+        "Payment Processing Error",
+        "An error occurred while processing your payment return. Please contact support.",
         "error"
       );
-
-      // Clean up any stored pending data and update orders to failed
-      const pendingPayment = localStorage.getItem(
-        "pendingInternetBankingPayment"
-      );
-      if (pendingPayment) {
-        const paymentData = JSON.parse(pendingPayment);
-        // Only update payment orders for non-subscription payments
-        if (!paymentData.isSubscriptionPayment && paymentData.orderId) {
-          try {
-            await supabase
-              .from("payment_orders")
-              .update({ status: "failed" })
-              .eq("id", paymentData.orderId);
-          } catch (error) {}
-        }
-      }
-
-      localStorage.removeItem("pendingRenewal");
-      localStorage.removeItem("pendingUpgrade");
-      localStorage.removeItem("pendingInternetBankingPayment");
-
-      // Clean up URL
+    } finally {
+      // Always clean up URL regardless of success/failure
       window.history.replaceState({}, document.title, window.location.pathname);
     }
+  };
+
+  const handleSuccessfulPaymentReturn = async () => {
+    // Early exit if payment was already marked as cancelled
+    if (paymentCancelled) {
+      console.log("Payment already cancelled - aborting success processing");
+      return;
+    }
+
+    console.log("Processing successful payment return");
+
+    // Get all possible pending payment data
+    const pendingRenewal = localStorage.getItem("pendingRenewal");
+    const pendingUpgrade = localStorage.getItem("pendingUpgrade");
+    const pendingPayment = localStorage.getItem(
+      "pendingInternetBankingPayment"
+    );
+
+    console.log("Checking pending payment data:", {
+      hasRenewal: !!pendingRenewal,
+      hasUpgrade: !!pendingUpgrade,
+      hasPayment: !!pendingPayment,
+    });
+
+    // Check if we have any pending payment data
+    if (!pendingRenewal && !pendingUpgrade && !pendingPayment) {
+      console.log(
+        "Success payment return but no pending payment data found - likely already processed"
+      );
+      showAlertModal(
+        "Payment Already Processed",
+        "This payment has already been processed successfully. Your account has been updated.",
+        "info"
+      );
+      return;
+    }
+
+    try {
+      // Double-check cancellation flag before processing
+      if (paymentCancelled) {
+        console.log("Payment cancelled during processing - aborting");
+        return;
+      }
+
+      if (pendingRenewal) {
+        await processRenewalReturn(pendingRenewal);
+      } else if (pendingUpgrade) {
+        await processUpgradeReturn(pendingUpgrade);
+      } else if (pendingPayment) {
+        await processGeneralPaymentReturn(pendingPayment);
+      }
+    } catch (error) {
+      console.error("Error processing successful payment:", error);
+      // Set cancellation flag on error
+      setPaymentCancelled(true);
+      showAlertModal(
+        "Payment Processing Failed",
+        "Payment was successful but processing failed. Please contact support.",
+        "error"
+      );
+    }
+  };
+
+  const handleFailedPaymentReturn = async () => {
+    console.log("Processing failed/cancelled payment return");
+
+    // Set global cancellation flag immediately to stop ALL processing
+    setPaymentCancelled(true);
+
+    // Clean up any stored pending data and update orders to failed FIRST
+    await cleanupFailedPaymentData();
+
+    showAlertModal(
+      "Payment Cancelled",
+      "Your payment was cancelled or failed. No charges have been made. Please try again if you wish to continue.",
+      "error"
+    );
+  };
+
+  const processRenewalReturn = async (pendingRenewalJson: string) => {
+    // Early exit if payment was cancelled
+    if (paymentCancelled) {
+      console.log("Payment cancelled - aborting renewal processing");
+      return;
+    }
+
+    const renewalData = JSON.parse(pendingRenewalJson);
+    localStorage.removeItem("pendingRenewal");
+    setPendingRenewalData(renewalData);
+
+    console.log("Processing renewal return:", {
+      hasChargeId: !!renewalData.chargeId,
+      hasOrderId: !!renewalData.orderId,
+    });
+
+    // Check cancellation flag again after parsing
+    if (paymentCancelled) {
+      console.log("Payment cancelled during renewal processing - aborting");
+      return;
+    }
+
+    // Validate that we have payment evidence before completing
+    if (!renewalData.chargeId && !renewalData.orderId) {
+      console.error("Renewal return without payment evidence");
+      setPaymentCancelled(true);
+      showAlertModal(
+        "Payment Verification Failed",
+        "Unable to verify payment completion. The payment may have been cancelled or failed to process properly.",
+        "error"
+      );
+      return;
+    }
+
+    // Complete the renewal - use credit card flow if chargeId exists
+    if (renewalData.chargeId) {
+      console.log("Completing credit card renewal");
+      await completeCreditCardRenewal({
+        chargeId: renewalData.chargeId,
+        orderId: renewalData.orderId,
+      });
+    } else {
+      console.log("Completing internet banking renewal");
+      await completeRenewal({
+        chargeId: renewalData.chargeId,
+        orderId: renewalData.orderId,
+      });
+    }
+  };
+
+  const processUpgradeReturn = async (pendingUpgradeJson: string) => {
+    const upgradeData = JSON.parse(pendingUpgradeJson);
+    localStorage.removeItem("pendingUpgrade");
+    setPendingUpgradeData(upgradeData);
+
+    console.log("Processing upgrade return:", {
+      hasChargeId: !!upgradeData.chargeId,
+      hasOrderId: !!upgradeData.orderId,
+    });
+
+    // Validate that we have payment evidence before completing
+    if (!upgradeData.chargeId && !upgradeData.orderId) {
+      console.error("Upgrade return without payment evidence");
+      showAlertModal(
+        "Payment Verification Failed",
+        "Unable to verify payment completion. The upgrade payment may have been cancelled or failed to process properly.",
+        "error"
+      );
+      return;
+    }
+
+    console.log("Completing upgrade");
+    // Complete the upgrade
+    await completeUpgrade({
+      chargeId: upgradeData.chargeId,
+      orderId: upgradeData.orderId,
+    });
+  };
+
+  const processGeneralPaymentReturn = async (pendingPaymentJson: string) => {
+    // Early exit if payment was cancelled
+    if (paymentCancelled) {
+      console.log("Payment cancelled - aborting general payment processing");
+      return;
+    }
+
+    // Safety check - if no JSON data, abort
+    if (!pendingPaymentJson || pendingPaymentJson.trim() === "") {
+      console.error("No pending payment JSON data - aborting processing");
+      setPaymentCancelled(true);
+      return;
+    }
+
+    let paymentData;
+    try {
+      paymentData = JSON.parse(pendingPaymentJson);
+    } catch (error) {
+      console.error(
+        "Failed to parse payment data - aborting processing:",
+        error
+      );
+      setPaymentCancelled(true);
+      return;
+    }
+
+    // Remove from localStorage immediately to prevent reprocessing
+    localStorage.removeItem("pendingInternetBankingPayment");
+
+    // Check cancellation flag again after parsing
+    if (paymentCancelled) {
+      console.log(
+        "Payment cancelled during general payment processing - aborting"
+      );
+      return;
+    }
+
+    console.log("Processing general payment return:", {
+      hasChargeId: !!paymentData.chargeId,
+      hasOrderId: !!paymentData.orderId,
+      isSubscription: !!paymentData.isSubscriptionPayment,
+    });
+
+    // Validate that we have payment evidence before completing
+    if (!paymentData.chargeId && !paymentData.orderId) {
+      console.error("Internet banking return without payment evidence");
+      setPaymentCancelled(true);
+      showAlertModal(
+        "Payment Verification Failed",
+        "Unable to verify payment completion. The payment may have been cancelled or failed to process properly.",
+        "error"
+      );
+      return;
+    }
+
+    // Extra safety check - if user doesn't match payment data, abort
+    if (user?.id && paymentData.userId && user.id !== paymentData.userId) {
+      console.error("User ID mismatch in payment data - aborting");
+      setPaymentCancelled(true);
+      return;
+    }
+
+    // Final cancellation check before subscription processing
+    if (paymentCancelled) {
+      console.log(
+        "Payment cancelled before subscription processing - aborting"
+      );
+      return;
+    }
+
+    if (paymentData.isSubscriptionPayment && paymentData.subscriptionContext) {
+      console.log("Completing internet banking subscription");
+      // Handle subscription payments (renewal/upgrade via internet banking)
+      await completeInternetBankingSubscription(paymentData);
+    } else {
+      console.log("Completing regular payment order");
+      // Handle regular payment orders (add-ons, etc.)
+      await processRegularPaymentOrder(paymentData);
+    }
+  };
+
+  const processRegularPaymentOrder = async (paymentData: any) => {
+    // CRITICAL: Check cancellation flag at the start
+    if (paymentCancelled) {
+      console.log("Payment cancelled - BLOCKING regular payment processing");
+      return;
+    }
+
+    if (!paymentData.orderId) {
+      console.error("No order ID found for regular payment");
+      setPaymentCancelled(true);
+      showAlertModal(
+        "Payment Verification Failed",
+        "Unable to verify payment completion. No order ID found.",
+        "error"
+      );
+      return;
+    }
+
+    try {
+      // CRITICAL: Check cancellation flag before database update
+      if (paymentCancelled) {
+        console.log("Payment cancelled before database update - BLOCKING");
+        return;
+      }
+
+      const { error } = await supabase
+        .from("payment_orders")
+        .update({
+          status: "completed",
+          completed_at: new Date().toISOString(),
+        })
+        .eq("id", paymentData.orderId);
+
+      // CRITICAL: Check cancellation flag after database update
+      if (paymentCancelled) {
+        console.log(
+          "Payment cancelled after database update - BLOCKING success processing"
+        );
+        return;
+      }
+
+      if (error) {
+        console.error("Error updating payment order:", error);
+        setPaymentCancelled(true);
+        showAlertModal(
+          "Payment Update Failed",
+          "Payment was successful but failed to update order status. Please contact support.",
+          "error"
+        );
+        return;
+      }
+
+      // CRITICAL: Check cancellation flag before data refresh
+      if (paymentCancelled) {
+        console.log("Payment cancelled before data refresh - BLOCKING");
+        return;
+      }
+
+      // Refresh subscription data to reflect the new payment
+      if (user?.id) {
+        await loadSubscriptionData(user.id);
+      }
+
+      // CRITICAL: Check cancellation flag before success modal
+      if (paymentCancelled) {
+        console.log("Payment cancelled before success modal - BLOCKING");
+        return;
+      }
+
+      showAlertModal(
+        "Payment Successful",
+        "Your internet banking payment has been completed successfully!",
+        "success"
+      );
+    } catch (error) {
+      // CRITICAL: Check cancellation flag before error modal
+      if (paymentCancelled) {
+        console.log(
+          "Payment cancelled in error handler - BLOCKING error modal"
+        );
+        return;
+      }
+
+      console.error("Payment completion error:", error);
+      showAlertModal(
+        "Payment Processing Error",
+        "Payment was successful but we couldn't update your account. Please contact support.",
+        "error"
+      );
+    }
+  };
+
+  const cleanupFailedPaymentData = async () => {
+    console.log("Starting cleanup of failed payment data");
+
+    // Get all payment data before clearing
+    const pendingRenewal = localStorage.getItem("pendingRenewal");
+    const pendingUpgrade = localStorage.getItem("pendingUpgrade");
+    const pendingPayment = localStorage.getItem(
+      "pendingInternetBankingPayment"
+    );
+
+    console.log("Payment data found during cleanup:", {
+      hasRenewal: !!pendingRenewal,
+      hasUpgrade: !!pendingUpgrade,
+      hasPayment: !!pendingPayment,
+    });
+
+    // Clear all localStorage data IMMEDIATELY to prevent any race conditions
+    localStorage.removeItem("pendingRenewal");
+    localStorage.removeItem("pendingUpgrade");
+    localStorage.removeItem("pendingInternetBankingPayment");
+
+    // Also clear any other payment-related data that might exist
+    localStorage.removeItem("omisePaymentInProgress");
+    localStorage.removeItem("internetBankingPaymentInProgress");
+
+    console.log("Cleared all localStorage payment data");
+
+    // Process the pending payment data for cleanup
+    if (pendingPayment) {
+      try {
+        const paymentData = JSON.parse(pendingPayment);
+        console.log("Cleaning up failed payment data:", {
+          hasOrderId: !!paymentData.orderId,
+          isSubscription: !!paymentData.isSubscriptionPayment,
+        });
+
+        // Only update payment orders for non-subscription payments
+        if (!paymentData.isSubscriptionPayment && paymentData.orderId) {
+          const { error } = await supabase
+            .from("payment_orders")
+            .update({
+              status: "failed",
+              failed_at: new Date().toISOString(),
+              failure_reason: "Payment cancelled by user",
+            })
+            .eq("id", paymentData.orderId);
+
+          if (error) {
+            console.error("Error updating failed payment order:", error);
+          } else {
+            console.log(
+              `Updated order ${paymentData.orderId} to failed status`
+            );
+          }
+        }
+      } catch (error) {
+        console.error(
+          "Error parsing pending payment data during cleanup:",
+          error
+        );
+      }
+    }
+
+    // Reset any pending data states
+    setPendingRenewalData(null);
+    setPendingUpgradeData(null);
+
+    console.log("Completed cleanup of all failed payment data");
   };
 
   const loadSubscriptionData = async (userId: string) => {
@@ -560,6 +1068,9 @@ export function Users() {
 
   const handleRenewToken = async () => {
     if (!user?.id || !token) return;
+
+    // Reset cancellation flag when starting new payment
+    setPaymentCancelled(false);
 
     // Use the current renewal pricing from state
     if (!renewalPricing) {
@@ -1517,6 +2028,15 @@ export function Users() {
     message: string,
     type: "success" | "error" | "info" = "info"
   ) => {
+    // CRITICAL: Block success modals if payment was cancelled
+    if (type === "success" && paymentCancelled) {
+      console.log("BLOCKING success modal - payment was cancelled:", {
+        title,
+        message,
+      });
+      return;
+    }
+
     setAlertModal({
       isOpen: true,
       title,

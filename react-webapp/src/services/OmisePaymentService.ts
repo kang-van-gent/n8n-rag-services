@@ -505,8 +505,9 @@ export class OmisePaymentService {
         }
 
         // Use the internet banking payment flow instead of trying to charge the fake token
-        const returnUri = `${window.location.origin}/users?payment=success`;
-        const failureUri = `${window.location.origin}/users?payment=failed`;
+        const proxyUrl = process.env.REACT_APP_OMISE_PROXY_URL || 'http://localhost:3001';
+        const returnUri = `${proxyUrl}/api/payment-return`;
+        const failureUri = `${proxyUrl}/api/payment-failure`;
 
         return await this.processInternetBankingPayment(
           userId,
@@ -932,14 +933,16 @@ export class OmisePaymentService {
 
         // Create internet banking source using our existing method
         // (this method will create the payment order with proper items)
+        // Use proxy server URLs for consistent status detection (same as saved methods)
+        const proxyUrl = process.env.REACT_APP_OMISE_PROXY_URL || 'http://localhost:3001';
         const result = await this.processInternetBankingPayment(
           userId,
           amount,
           currency,
           description,
           selectedBank,
-          `${window.location.origin}/cart?payment=success`,
-          `${window.location.origin}/cart?payment=failed`,
+          `${proxyUrl}/api/payment-return`,
+          `${proxyUrl}/api/payment-failure`,
           items
         );
 

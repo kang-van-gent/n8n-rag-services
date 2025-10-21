@@ -59,8 +59,11 @@ const NewPaymentForm: React.FC<NewPaymentFormProps> = ({
 
     setProcessing(true);
     try {
-      const returnUri = `${window.location.origin}/users?payment=success`;
-      const failureUri = `${window.location.origin}/users?payment=failed`;
+      // Use proxy server URLs for consistent status detection (same as saved methods)
+      const proxyUrl =
+        process.env.REACT_APP_OMISE_PROXY_URL || "http://localhost:3001";
+      const returnUri = `${proxyUrl}/api/payment-return`;
+      const failureUri = `${proxyUrl}/api/payment-failure`;
 
       const result = await OmisePaymentService.processInternetBankingPayment(
         userId,
