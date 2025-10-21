@@ -267,16 +267,28 @@ app.post('/api/internet-banking-charge', async (req, res) => {
         console.log('✅ Source created successfully:', sourceResult.id);
 
         // Step 2: Create charge with source
-        // Modify return URIs to include tracking info
+        // Modify return URIs to include tracking info (append correctly whether or not there are existing query params)
         const trackingId = `track_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+        const appendTracking = (uri) => {
+            try {
+                const u = new URL(uri);
+                u.searchParams.set('tracking_id', trackingId);
+                return u.toString();
+            } catch (e) {
+                // Fallback for unexpected formats
+                const sep = uri.includes('?') ? '&' : '?';
+                return `${uri}${sep}tracking_id=${trackingId}`;
+            }
+        };
 
         const chargeData = {
             amount: parseInt(amount),
             currency: currency.toLowerCase(),
             source: sourceResult.id,
             description: description || 'Internet Banking Payment',
-            return_uri: `${return_uri}?tracking_id=${trackingId}`,
-            failure_uri: `${failure_uri}?tracking_id=${trackingId}`,
+            return_uri: appendTracking(return_uri),
+            failure_uri: appendTracking(failure_uri),
             metadata: {
                 ...metadata,
                 tracking_id: trackingId

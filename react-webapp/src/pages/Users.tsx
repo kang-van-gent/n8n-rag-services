@@ -520,7 +520,8 @@ export function Users() {
         targetPlan,
         paymentData.chargeId || paymentData.orderId,
         "internet_banking",
-        paymentData.amount // Pass the actual amount paid
+        paymentData.amount, // Pass the actual amount paid
+        { existingAddons: paymentData.subscriptionContext?.token?.addons }
       );
 
       console.log(
@@ -831,7 +832,8 @@ export function Users() {
         upgradeData.targetPlan,
         upgradeData.chargeId || upgradeData.orderId,
         "internet_banking",
-        upgradeData.amount // Pass the actual amount paid
+        upgradeData.amount,
+        { existingAddons: upgradeData.token?.addons }
       );
     } catch (error) {
       console.error("Internet banking upgrade completion error:", error);
@@ -1827,7 +1829,8 @@ export function Users() {
           targetPlan,
           result.chargeId,
           "internet_banking", // This is for internet banking modal payments
-          upgradeDetails.upgradePrice // Pass the actual amount
+          upgradeDetails.upgradePrice, // Pass the actual amount
+          { existingAddons: token?.addons }
         );
       } else {
         showAlertModal(
@@ -1868,7 +1871,8 @@ export function Users() {
     targetPlan: string,
     chargeId?: string,
     paymentMethod: string = "credit_card",
-    actualAmountPaid?: number // Add the actual amount paid parameter
+    actualAmountPaid?: number, // Add the actual amount paid parameter
+    options?: { existingAddons?: any[] }
   ) => {
     console.log("🚀 Starting processUpgrade:", {
       targetPlan,
@@ -1894,7 +1898,18 @@ export function Users() {
     );
 
     try {
-      console.log("📝 Step 1: Deactivating current token...");
+      console.log(
+        "📝 Step 1: Capturing existing addons before deactivation..."
+      );
+      // Capture user's current addons BEFORE deactivating token
+      // Fallback to provided options when token context isn't loaded yet (post-redirect flows)
+      const existingAddonsSnapshot = Array.isArray((token as any)?.addons)
+        ? ([...(token as any).addons] as any[])
+        : Array.isArray(options?.existingAddons)
+        ? ([...(options as any).existingAddons] as any[])
+        : [];
+
+      console.log("📝 Step 1.1: Deactivating current token...");
       // 1. Deactivate current token
       await TokenService.deactivateToken(user.id);
       console.log("✅ Current token deactivated successfully");
@@ -1903,7 +1918,11 @@ export function Users() {
       console.log("📝 Step 2: Creating new token data...");
       const billingCycle =
         billingSettings?.billing_cycle === "yearly" ? "yearly" : "monthly";
-      const newTokenData = composeToken(targetPlan, billingCycle);
+      const newTokenData = composeToken(
+        targetPlan,
+        billingCycle,
+        existingAddonsSnapshot
+      );
       console.log("✅ New token data composed:", newTokenData);
 
       console.log("📝 Step 3: Creating new token in database...");
@@ -2170,6 +2189,16 @@ export function Users() {
     const cleaned = n.replace(/[^a-z0-9]/gi, "");
     return (cleaned.slice(0, 4) || "pkg").toUpperCase();
   };
+  // Helper: normalize a feature/addon key to canonical lowercase snake_case-ish string
+  const normalizeFeatureKey = (val: any): string | null => {
+    if (!val) return null;
+    if (typeof val === "string") return val.trim().toLowerCase();
+    if (typeof val === "object") {
+      const k = val.key || val.feature_key || val.name || val.id;
+      return k ? String(k).trim().toLowerCase() : null;
+    }
+    return null;
+  };
 
   const generateToken = (pkgName: string) => {
     const ts = Date.now().toString(36);
@@ -2235,23 +2264,49 @@ export function Users() {
     return expiry.toISOString();
   };
 
-  const composeToken = (pkg: string, type: string) => {
+  const composeToken = (pkg: string, type: string, existingAddons?: any[]) => {
     const cleanPkg = normalizePackage(pkg || "basic");
     const tokenStr = generateToken(cleanPkg);
     const features = PLAN_FEATURES[cleanPkg] || PLAN_FEATURES["basic"];
     const expiredAt = calcExpiry(type);
 
-    // Filter out add-ons that are now included in the base plan
-    const baseFeatureKeys = features.map((f) => f.feature_key);
-    const filteredAddons = (token?.addons || []).filter((addon) => {
-      // If the add-on's feature is now included in the base plan, remove it
-      return !baseFeatureKeys.includes(
-        addon.feature_key || addon.key || addon.name
-      );
+    // Determine source addons: prefer provided existingAddons (captured before deactivation),
+    // fallback to current token addons, else empty
+    const baseFeatureKeys = features
+      .map((f) => normalizeFeatureKey(f.feature_key)!)
+      .filter(Boolean);
+    const sourceAddons: any[] = Array.isArray(existingAddons)
+      ? existingAddons
+      : Array.isArray((token as any)?.addons)
+      ? ((token as any).addons as any[]) || []
+      : [];
+
+    // Keep only addons NOT included in the new plan's base features
+    const preservedAddons = sourceAddons.filter((addon) => {
+      const addonKey = normalizeFeatureKey(addon);
+      return addonKey ? !baseFeatureKeys.includes(addonKey) : false;
     });
 
-    // If no current token available (during upgrade), start with empty addons
-    const finalAddons = token ? filteredAddons : [];
+    // Normalize addon shape to ensure TokenFeatureService can recognize them
+    // We canonicalize on `key` and carry over known fields when present
+    const finalAddons = preservedAddons.map((addon: any) => {
+      if (typeof addon === "string") {
+        return { key: addon };
+      }
+      const canonicalKey = normalizeFeatureKey(addon);
+      return {
+        key: String(canonicalKey),
+        // keep existing metadata if available
+        name: addon.name,
+        description: addon.description,
+        category: addon.category,
+        quantity: addon.quantity ?? 1,
+        price: addon.price,
+        period: addon.period,
+        addedAt: addon.addedAt,
+        orderId: addon.orderId,
+      };
+    });
 
     return {
       package: cleanPkg,
@@ -2259,7 +2314,7 @@ export function Users() {
       status: "active", // Set to active for upgrades
       type: (type || "monthly").toLowerCase(),
       features,
-      addons: finalAddons, // Use filtered add-ons or empty array if no current token
+      addons: finalAddons, // Carry over only addons not included in new plan (normalized with `key`)
       expiredAt,
     };
   };
@@ -2285,29 +2340,27 @@ export function Users() {
 
   const getAddonsIncludedInPlan = (planKey: string) => {
     const cleanPkg = normalizePackage(planKey);
-    const baseFeatureKeys = (
-      PLAN_FEATURES[cleanPkg] || PLAN_FEATURES["basic"]
-    ).map((f) => f.feature_key);
+    const baseFeatureKeys = (PLAN_FEATURES[cleanPkg] || PLAN_FEATURES["basic"])
+      .map((f) => normalizeFeatureKey(f.feature_key)!)
+      .filter(Boolean);
 
     // Find current add-ons that would be included in the new plan
     return (token?.addons || []).filter((addon) => {
-      return baseFeatureKeys.includes(
-        addon.feature_key || addon.key || addon.name
-      );
+      const addonKey = normalizeFeatureKey(addon);
+      return addonKey ? baseFeatureKeys.includes(addonKey) : false;
     });
   };
 
   const getRemainingAddons = (planKey: string) => {
     const cleanPkg = normalizePackage(planKey);
-    const baseFeatureKeys = (
-      PLAN_FEATURES[cleanPkg] || PLAN_FEATURES["basic"]
-    ).map((f) => f.feature_key);
+    const baseFeatureKeys = (PLAN_FEATURES[cleanPkg] || PLAN_FEATURES["basic"])
+      .map((f) => normalizeFeatureKey(f.feature_key)!)
+      .filter(Boolean);
 
     // Find current add-ons that would still be add-ons in the new plan
     return (token?.addons || []).filter((addon) => {
-      return !baseFeatureKeys.includes(
-        addon.feature_key || addon.key || addon.name
-      );
+      const addonKey = normalizeFeatureKey(addon);
+      return addonKey ? !baseFeatureKeys.includes(addonKey) : false;
     });
   };
 
